@@ -1,0 +1,7 @@
+{
+	  "id"        : "preside-ext-performance-analyser"
+	, "title"     : "Preside Performance Analyser"
+	, "author"    : "Pixl8 Group"
+	, "version"   : "$VERSION_NUMBER"
+	, "dependsOn" : []
+}
