@@ -7,7 +7,7 @@ This is currently a work in progress and nothing to see here :)
 
 ## Versioning
 
-We use [SemVer](https://semver.org) for versioning. For the versions available, see the [tags on this repository](https://github.com/pixl8/preside-ext-performance-analyser/releases). Project releases can also be found and installed from [Forgebox](https://forgebox.io/view/presidecms)
+We use [SemVer](https://semver.org) for versioning. For the versions available, see the [tags on this repository](https://github.com/pixl8/preside-ext-performance-analyser/releases). Project releases can also be found and installed from [Forgebox](https://forgebox.io/view/preside-ext-performance-analyser)
 
 ## License
 
