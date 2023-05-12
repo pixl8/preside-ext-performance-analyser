@@ -6,6 +6,8 @@ component {
 
 		_setupPermissions( settings );
 		_setupNavigation( settings );
+		_setupExtensionSettings( settings );
+		_setupEnums( settings );
 	}
 
 	private void function _setupPermissions( settings ) {
@@ -24,5 +26,15 @@ component {
 			, buildLinkArgs = { linkTo="performanceanalyser" }
 			, activeChecks  = { handlerPatterns="^admin\.performanceanalyser" }
 		};
+	}
+
+	private void function _setupExtensionSettings( settings ) {
+		settings.performanceAnalyser = settings.performanceAnalyser ?: {};
+
+		settings.performanceAnalyser.luceeAdminPassword = settings.performanceAnalyser.luceeAdminPassword ?: ( settings.env.LUCEE_ADMIN_PASSWORD ?: "" );
+	}
+
+	private void function _setupEnums( settings ) {
+		settings.enum.luceeDebugFeatures = [ "database", "queryusage", "dump", "exception", "timer", "tracing" ];
 	}
 }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<form i18nBaseUri="performanceanalyser:settings.form.">
+	<tab id="default">
+		<fieldset id="logging">
+			<field name="debug"      control="yesnoswitch" />
+			<field name="maxlogs"    control="spinner"     />
+			<field name="features"   control="enumRadioList" multiple="true" enum="luceeDebugFeatures" />
+		</fieldset>
+		<fieldset id="display">
+			<field name="showlogs"    control="yesnoswitch" />
+			<field name="ipaddresses" control="textinput" />
+		</fieldset>
+	</tab>
+</form>
