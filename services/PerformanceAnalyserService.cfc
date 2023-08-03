@@ -67,6 +67,10 @@ component {
 		adminApi.call( action="updateDebug", argumentCollection=debugSettings );
 	}
 
+	public function getRawDebugLogs(){
+		return adminApi.call( "getLoggedDebugData" );
+	}
+
 	public function getDebugTemplate() {
 		var templates = adminApi.call( "getDebugEntry" );
 		for( var template in templates ) {

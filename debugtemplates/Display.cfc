@@ -84,18 +84,24 @@ private function isColumnEmpty(query query, string columnName){
 <cfset time=getTickCount()>
 <cfset var _cgi=structKeyExists(debugging,'cgi')?debugging.cgi:cgi>
 
-<cfset pages=debugging.pages>
-<cfset queries=debugging.queries>
+<cfif not isDefined('debugging.pages')>
+	<cfset debugging.pages=queryNew('')>
+</cfif>
+<cfif not isDefined('debugging.queries')>
+	<cfset debugging.queries=queryNew('')>
+</cfif>
 <cfif not isDefined('debugging.timers')>
 	<cfset debugging.timers=queryNew('label,time,template')>
 </cfif>
 <cfif not isDefined('debugging.traces')>
 	<cfset debugging.traces=queryNew('type,category,text,template,line,var,total,trace')>
 </cfif>
+<cfset pages=debugging.pages>
+<cfset queries=debugging.queries>
 <cfset timers=debugging.timers>
 <cfset traces=debugging.traces>
 <cfset querySort(pages,"avg","desc")>
-<cfset implicitAccess=debugging.implicitAccess>
+<cfset implicitAccess=isQuery( debugging.implicitAccess ?: "" ) ? debugging.implicitAccess : QueryNew( 'template,line,count' )>
 <cfset querySort(implicitAccess,"template,line,count","asc,asc,desc")>
 
 <cfparam name="custom.unit" default="millisecond">

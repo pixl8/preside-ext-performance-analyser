@@ -2,6 +2,7 @@ component extends="preside.system.base.AdminHandler" {
 
 	property name="performanceAnalyserService" inject="performanceAnalyserService";
 	property name="luceeAdminApiWrapper"       inject="luceeAdminApiWrapper";
+	property name="heapDumpService"            inject="heapDumpService";
 	property name="luceeDebugFeatures"         inject="coldbox:setting:enum.luceeDebugFeatures";
 
 	function preHandler( event, rc, prc ) {
@@ -20,11 +21,13 @@ component extends="preside.system.base.AdminHandler" {
 	public void function index() {
 		prc.pageTitle = translateResource( "performanceanalyser:admin.homepage.title" );
 
-		if ( prc.canControlAdmin ){
-			prc.debugSettings    = performanceAnalyserService.getDebugSettings();
-			prc.debuggingEnabled = isTrue( prc.debugSettings.debug ?: "" );
-		}
+		prc.tabs = [ "debugger", "threads", "heapdumps" ];
+		prc.tab = rc.tab ?: "";
 
+		if ( !ArrayFindNoCase( prc.tabs, prc.tab ) ) {
+			prc.tab = prc.tabs[ 1 ];
+		}
+		prc.tabContent = renderViewlet( event="admin.performanceAnalyser._#prc.tab#Tab" );
 		prc.topRightButtons = renderViewlet( "admin.performanceanalyser.topRightButtons" );
 	}
 
@@ -98,14 +101,51 @@ component extends="preside.system.base.AdminHandler" {
 		setNextEvent( url=event.buildAdminLink( linkto="performanceanalyser" ) );
 	}
 
-// PRIVATE VIEWLETS, ETC
-	private string function topRightButtons() {
-		if ( IsTrue( prc.canControlAdmin ?: "" ) ) {
-			var link    = event.buildAdminLink( linkto="performanceanalyser.editsettings" );
-			var btnText = translateResource( "performanceanalyser:edit.debug.settings.btn" );
-
-			return '<a href="#link#" class="btn btn-default"><i class="fa fa-cogs"></i> #btnText#</a>';
+	public void function takeHeapdumpAction() {
+		if ( !prc.canControlAdmin ) {
+			event.adminAccessDenied();
 		}
+
+		setNextEvent( url=heapDumpService.getHeapDump() );
 	}
 
+// PRIVATE VIEWLETS, ETC
+	private string function topRightButtons() {
+		var buttons = [];
+
+		if ( IsTrue( prc.canControlAdmin ?: "" ) ) {
+			ArrayAppend( buttons, {
+				  link      = event.buildAdminLink( linkto="performanceanalyser.editsettings" )
+				, title     = translateResource( "performanceanalyser:edit.debug.settings.btn" )
+				, iconClass = "fa-cogs"
+				, btnClass  = "btn-primary"
+			} );
+
+			ArrayAppend( buttons, {
+				  link      = event.buildAdminLink( linkto="performanceanalyser.takeHeapdumpAction" )
+				, title     = translateResource( "performanceanalyser:heap.dump.btn" )
+				, iconClass = "fa-download"
+				, btnClass  = "btn-secondary"
+			} );
+		}
+
+		for( var i=1; i<=ArrayLen( buttons ); i++) {
+			buttons[ i ] = renderView( view="/admin/datamanager/_topRightButton", args=buttons[ i ] );
+		}
+
+		return ArrayToList( buttons, " " );
+	}
+
+	private string function _debuggerTab( event, rc, prc, args={} ) {
+		if ( prc.canControlAdmin ){
+			args.debugSettings    = performanceAnalyserService.getDebugSettings();
+			args.debuggingEnabled = isTrue( args.debugSettings.debug ?: "" );
+		}
+
+		return renderView( view="/admin/performanceAnalyser/_debuggerTab", args=args );
+	}
+
+	private string function _threadsTab() {
+		return '<p class="text-center">TODO: something really awesome here!</p>';
+	}
 }
