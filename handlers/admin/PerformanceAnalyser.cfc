@@ -1,9 +1,9 @@
 component extends="preside.system.base.AdminHandler" {
 
-	property name="performanceAnalyserService" inject="performanceAnalyserService";
-	property name="luceeAdminApiWrapper"       inject="luceeAdminApiWrapper";
-	property name="heapDumpService"            inject="heapDumpService";
-	property name="luceeDebugFeatures"         inject="coldbox:setting:enum.luceeDebugFeatures";
+	property name="luceeDebuggingService" inject="luceeDebuggingService";
+	property name="luceeAdminApiWrapper"  inject="luceeAdminApiWrapper";
+	property name="heapDumpService"       inject="heapDumpService";
+	property name="luceeDebugFeatures"    inject="coldbox:setting:enum.luceeDebugFeatures";
 
 	function preHandler( event, rc, prc ) {
 		super.preHandler( argumentCollection=arguments );
@@ -39,7 +39,7 @@ component extends="preside.system.base.AdminHandler" {
 		prc.pageTitle = translateResource( "performanceanalyser:edit.settings.page.title" );
 		event.addAdminBreadCrumb( title=translateResource( "performanceanalyser:edit.settings.page.breadcrumb" ), link="" );
 
-		var rawSettings = performanceAnalyserService.getDebugSettings();
+		var rawSettings = luceeDebuggingService.getDebugSettings();
 
 		prc.debugSettings = {
 			  debug       = rawSettings.debug
@@ -81,7 +81,7 @@ component extends="preside.system.base.AdminHandler" {
 			);
 		}
 
-		performanceAnalyserService.saveDebugSettings(
+		luceeDebuggingService.saveDebugSettings(
 			  debug       = isTrue( formData.debug ?: "" )
 			, maxlogs     = Val( formData.maxlogs ?: 10 )
 			, features    = ListToArray( formData.features ?: "" )
@@ -107,6 +107,23 @@ component extends="preside.system.base.AdminHandler" {
 		}
 
 		setNextEvent( url=heapDumpService.getHeapDump() );
+	}
+
+	public void function debugLogDetail() {
+		var logId = Trim( rc.logId ?: "" );
+
+		prc.debugLogDetail = luceeDebuggingService.getDebugLogDetail( logId );
+
+		if ( StructIsEmpty( prc.debugLogDetail ) ) {
+			messagebox.warning( translateResource( "performanceanalyser:log.not.found" ) );
+			setNextEvent( url=event.buildAdminLink( linkto="performanceanalyser", querystring="tab=debugger" ) );
+		}
+
+		event.addAdminBreadCrumb( title=translateResource( uri="performanceanalyser:breadcrumb.debugger" ), link=event.buildAdminLink( linkto="performanceanalyser", querystring="tab=debugger" ) );
+		event.addAdminBreadCrumb( title=translateResource( uri="performanceanalyser:breadcrumb.debuglog", data=[ rc.logId ] ), link=event.buildAdminLink( linkto="performanceanalyser", querystring="tab=debugger&logid=#logId#" ) );
+
+		prc.pageTitle = translateResource( uri="performanceanalyser:page.debuglog.detail.title", data=[ logId ] );
+		prc.iconClass = "fa-search";
 	}
 
 // PRIVATE VIEWLETS, ETC
@@ -138,8 +155,12 @@ component extends="preside.system.base.AdminHandler" {
 
 	private string function _debuggerTab( event, rc, prc, args={} ) {
 		if ( prc.canControlAdmin ){
-			args.debugSettings    = performanceAnalyserService.getDebugSettings();
+			args.debugSettings    = luceeDebuggingService.getDebugSettings();
 			args.debuggingEnabled = isTrue( args.debugSettings.debug ?: "" );
+
+			if ( args.debuggingEnabled ) {
+				args.debugLogs = luceeDebuggingService.getDebugLogSummary();
+			}
 		}
 
 		return renderView( view="/admin/performanceAnalyser/_debuggerTab", args=args );

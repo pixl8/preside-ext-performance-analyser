@@ -85,4 +85,56 @@ component {
 		return Val( adminApi.call( "getDebugSetting" ).maxLogs ?: "" );
 	}
 
+	public array function getDebugLogSummary() {
+		var logs    = adminApi.call( "getLoggedDebugData" );
+		var summary = [];
+
+		for( var i=ArrayLen( logs ); i>0; i-- ) {
+			var l = logs[ i ];
+			if ( l.pages.recordCount == 1 && l.pages.src contains "ThreadFactoryRunnableProxy.cfc$run" ) {
+				continue;
+			}
+
+			var s = {
+				  id       = l.id
+				, queries  = l.queries.recordcount
+				, exectime = 0
+				, started  = l.starttime
+				, url      = ""
+				, pagetype = ""
+			};
+
+			for( var p in l.pages ) {
+				s.exectime += p.total;
+			}
+
+			if ( IsQuery( l.genericData ?: "" ) ) {
+				for( var d in l.genericData ) {
+					if ( d.category == "custom" ) {
+						if ( d.name == "pageUrl" ) {
+							s.url = d.value;
+						} else if ( d.name == "pageType" ) {
+							s.pageType = d.value;
+						}
+					}
+				}
+			}
+			ArrayAppend( summary, s  );
+		}
+
+		return summary;
+	}
+
+	public struct function getDebugLogDetail( required string id ) {
+		var logs = adminApi.call( "getLoggedDebugData" );
+
+		for( var l in logs ) {
+			if ( l.id == arguments.id ) {
+				return l;
+			}
+		}
+
+		return {};
+	}
+
 }

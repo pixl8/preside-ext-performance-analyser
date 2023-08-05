@@ -8,6 +8,7 @@ component {
 		_setupNavigation( settings );
 		_setupExtensionSettings( settings );
 		_setupEnums( settings );
+		_setupInterceptors( conf );
 	}
 
 	private void function _setupPermissions( settings ) {
@@ -36,5 +37,9 @@ component {
 
 	private void function _setupEnums( settings ) {
 		settings.enum.luceeDebugFeatures = [ "database", "queryusage", "dump", "exception", "timer", "tracing" ];
+	}
+
+	private void function _setupInterceptors( config ) {
+		ArrayAppend( config.interceptors, { class="app.extensions.preside-ext-performance-analyser.interceptors.PerformanceAnalyserInterceptor", properties={} } );
 	}
 }
