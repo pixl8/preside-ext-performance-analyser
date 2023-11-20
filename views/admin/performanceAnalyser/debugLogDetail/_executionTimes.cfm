@@ -22,7 +22,7 @@
 						<td>#perfAnalyserPrettyTime( pages.min   )#</td>
 						<td>#perfAnalyserPrettyTime( pages.max   )#</td>
 						<td>#perfAnalyserPrettyTime( pages.avg   )#</td>
-						<td>#perfAnalyserPrettyTime( pages.total )#</td>
+						<td>#int( pages.total )#</td>
 						<td>#pages.src#</td>
 					</tr>
 				</cfloop>

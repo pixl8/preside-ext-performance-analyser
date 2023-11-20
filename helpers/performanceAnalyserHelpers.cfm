@@ -10,7 +10,7 @@
 		 	return LsNumberFormat( s, "0.00" );
 		 }
 
-		return LsNumberFormat( s );
+		return LsNumberFormat( s, "0" );
 	</cfscript>
 </cffunction>
 

@@ -42,11 +42,15 @@ component extends="preside.system.base.AdminHandler" {
 		var rawSettings = luceeDebuggingService.getDebugSettings();
 
 		prc.debugSettings = {
-			  debug       = rawSettings.debug
-			, maxlogs     = rawSettings.maxLogs
-			, showlogs    = ( rawSettings.templateSettings.type ?: "" ) != "performance-analyser-empty"
-			, ipaddresses = ( rawSettings.templateSettings.ipRange ?: cgi.remote_addr )
-			, features    = []
+			  debug           = rawSettings.debug
+			, showlogs        = ( rawSettings.templateSettings.type ?: "" ) != "performance-analyser-empty"
+			, ipaddresses     = ( rawSettings.templateSettings.ipRange ?: cgi.remote_addr )
+			, features        = []
+			, storageduration = rawSettings.storageduration
+			, includetasks    = rawSettings.includetasks
+			, onlyforips      = rawSettings.onlyforips
+			, onlyforurls     = rawSettings.onlyforurls
+			, excludeurls     = rawSettings.excludeurls
 		};
 
 		for( var feature in luceeDebugFeatures ) {
@@ -55,6 +59,8 @@ component extends="preside.system.base.AdminHandler" {
 			}
 		}
 		prc.debugSettings.features = ArrayToList( prc.debugSettings.features );
+
+		event.include( "/js/admin/specific/performanceanalysersettings/" )
 
 		prc.formName   = "performance.analyser.settings";
 		prc.postAction = event.buildAdminLink( linkto="performanceanalyser.editSettingsAction" );
@@ -82,11 +88,16 @@ component extends="preside.system.base.AdminHandler" {
 		}
 
 		luceeDebuggingService.saveDebugSettings(
-			  debug       = isTrue( formData.debug ?: "" )
-			, maxlogs     = Val( formData.maxlogs ?: 10 )
-			, features    = ListToArray( formData.features ?: "" )
-			, showlogs    = isTrue( formData.showlogs ?: "" )
-			, ipaddresses = formData.ipaddresses ?: cgi.remote_addr
+			  debug           = isTrue( formData.debug ?: "" )
+			, maxlogs         = Val( formData.maxlogs ?: 10 )
+			, features        = ListToArray( formData.features ?: "" )
+			, showlogs        = isTrue( formData.showlogs ?: "" )
+			, ipaddresses     = formData.ipaddresses ?: cgi.remote_addr
+			, storageduration = Val( formData.storageduration ?: 1 )
+			, includetasks    = isTrue( formData.includetasks ?: "" )
+			, onlyforips      = formData.onlyforips ?: ""
+			, onlyforurls     = formData.onlyforurls ?: ""
+			, excludeurls     = formData.excludeurls ?: ""
 		);
 
 		event.audit(
@@ -158,9 +169,9 @@ component extends="preside.system.base.AdminHandler" {
 			args.debugSettings    = luceeDebuggingService.getDebugSettings();
 			args.debuggingEnabled = isTrue( args.debugSettings.debug ?: "" );
 
-			if ( args.debuggingEnabled ) {
-				args.debugLogs = luceeDebuggingService.getDebugLogSummary();
-			}
+			// if ( args.debuggingEnabled ) {
+			// 	args.debugLogs = luceeDebuggingService.getDebugLogSummary();
+			// }
 		}
 
 		return renderView( view="/admin/performanceAnalyser/_debuggerTab", args=args );

@@ -32,7 +32,9 @@
 			<p>#translateResource( "performanceanalyser:debugging.enabled.description" )#</p>
 		</div>
 
-		<div class="table-responsive">
+		#objectDataTable( "perfanalyser_req_log" )#
+
+		<!--- <div class="table-responsive">
 			<table class="table table-striped static-data-table">
 				<thead>
 					<tr>
@@ -69,6 +71,6 @@
 					</cfloop>
 				</tbody>
 			</table>
-		</div>
+		</div> --->
 	</cfif>
 </cfoutput>

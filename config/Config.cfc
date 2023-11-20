@@ -36,7 +36,8 @@ component {
 	}
 
 	private void function _setupEnums( settings ) {
-		settings.enum.luceeDebugFeatures = [ "database", "queryusage", "dump", "exception", "timer", "tracing" ];
+		settings.enum.luceeDebugFeatures     = [ "database", "queryusage", "dump", "exception", "timer", "tracing" ];
+		settings.enum.luceeDebugRequestTypes = [ "http", "task", "adhoctask" ];
 	}
 
 	private void function _setupInterceptors( config ) {
