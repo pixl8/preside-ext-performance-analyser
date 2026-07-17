@@ -4,27 +4,35 @@ component extends="coldbox.system.Interceptor" {
 
 	public void function configure() {}
 
-	// public void function onRequestEnd( event ) {
-	// 	luceeDebuggingService.get().log(
-	// 		  pageUrl   = event.getCurrentUrl()
-	// 		, adminuser = event.getAdminUserId()
-	// 		, webuser   = getLoggedInUserId()
-	// 	);
-	// }
+	public void function preProcess( event ) {
+		luceeDebuggingService.get().applyRequestMonitoringOutput();
+	}
 
-	// public void function postRunTaskManagerTask( event, interceptData ) {
-	// 	luceeDebuggingService.get().log(
-	// 		  pageUrl = interceptData.task.event ?: "-"
-	// 		, type    = "task"
-	// 	);
-	// }
+	/**
+	 * ColdBox end-of-request point (NOT Application.cfc onRequestEnd —
+	 * that name is never announced as an interception state).
+	 */
+	public void function postProcess( event ) {
+		try {
+			luceeDebuggingService.get().log(
+				  pageUrl   = event.getCurrentUrl()
+				, adminuser = event.getAdminUserId()
+				, webuser   = _safeWebUserId()
+			);
+		} catch ( any e ) {
+			writeLog(
+				  type = "error"
+				, file = "performanceanalyser"
+				, text = "Failed to persist debug log: #e.message# | #e.detail# | #e.stacktrace#"
+			);
+		}
+	}
 
-	// public void function postRunAdhocTask( event, interceptData ) {
-	// 	luceeDebuggingService.get().log(
-	// 		  pageUrl   = interceptData.task.event       ?: "-"
-	// 		, adminuser = interceptData.task.admin_owner ?: ""
-	// 		, webuser   = interceptData.task.web_owner   ?: ""
-	// 		, type      = "adhoctask"
-	// 	);
-	// }
+	private string function _safeWebUserId() {
+		try {
+			return getLoggedInUserId();
+		} catch ( any e ) {
+			return "";
+		}
+	}
 }

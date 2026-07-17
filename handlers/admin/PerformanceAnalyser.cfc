@@ -19,6 +19,8 @@ component extends="preside.system.base.AdminHandler" {
 
 // PUBLIC ACTIONS
 	public void function index() {
+		// dump( luceeAdminApiWrapper.call( "getDebug" ) );abort;
+
 		prc.pageTitle = translateResource( "performanceanalyser:admin.homepage.title" );
 
 		prc.tabs = [ "debugger", "threads", "heapdumps" ];
@@ -41,10 +43,15 @@ component extends="preside.system.base.AdminHandler" {
 
 		var rawSettings = luceeDebuggingService.getDebugSettings();
 
+		var templateIpRange = Trim( rawSettings.templateSettings.ipRange ?: "" );
+		if ( templateIpRange == "*" ) {
+			templateIpRange = "";
+		}
+
 		prc.debugSettings = {
 			  debug           = rawSettings.debug
-			, showlogs        = ( rawSettings.templateSettings.type ?: "" ) != "performance-analyser-empty"
-			, ipaddresses     = ( rawSettings.templateSettings.ipRange ?: cgi.remote_addr )
+			, showlogs        = IsTrue( rawSettings.showlogs ?: "" )
+			, ipaddresses     = templateIpRange
 			, features        = []
 			, storageduration = rawSettings.storageduration
 			, includetasks    = rawSettings.includetasks
@@ -89,7 +96,6 @@ component extends="preside.system.base.AdminHandler" {
 
 		luceeDebuggingService.saveDebugSettings(
 			  debug           = isTrue( formData.debug ?: "" )
-			, maxlogs         = Val( formData.maxlogs ?: 10 )
 			, features        = ListToArray( formData.features ?: "" )
 			, showlogs        = isTrue( formData.showlogs ?: "" )
 			, ipaddresses     = formData.ipaddresses ?: cgi.remote_addr
@@ -167,11 +173,7 @@ component extends="preside.system.base.AdminHandler" {
 	private string function _debuggerTab( event, rc, prc, args={} ) {
 		if ( prc.canControlAdmin ){
 			args.debugSettings    = luceeDebuggingService.getDebugSettings();
-			args.debuggingEnabled = isTrue( args.debugSettings.debug ?: "" );
-
-			// if ( args.debuggingEnabled ) {
-			// 	args.debugLogs = luceeDebuggingService.getDebugLogSummary();
-			// }
+			args.debuggingEnabled = IsTrue( args.debugSettings.debug ?: "" );
 		}
 
 		return renderView( view="/admin/performanceAnalyser/_debuggerTab", args=args );

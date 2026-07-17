@@ -12,6 +12,6 @@ component {
 
 	property name="sql"         type="string" dbtype="text" require=true;
 	property name="sql_hash"    type="string" dbtype="char" maxlength=35 require=true indexes="qryhash";
-	property name="exec_time"   type="numeric" dbtype="int" require=true indexes="exectime";
-	property name="recordcount" type="numeric" dbtype="int" require=true indexes="recordcount";
+	property name="exec_time"   type="numeric" dbtype="bigint" require=true indexes="exectime";
+	property name="recordcount" type="numeric" dbtype="int"    require=true indexes="recordcount";
 }

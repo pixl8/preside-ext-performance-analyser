@@ -32,11 +32,11 @@ component {
 	private void function _setupExtensionSettings( settings ) {
 		settings.performanceAnalyser = settings.performanceAnalyser ?: {};
 
-		settings.performanceAnalyser.luceeAdminPassword = settings.performanceAnalyser.luceeAdminPassword ?: ( settings.env.LUCEE_ADMIN_PASSWORD ?: "" );
+		settings.performanceAnalyser.luceeAdminPassword = settings.performanceAnalyser.luceeAdminPassword ?: ( settings.env.LUCEE_ADMIN_PASSWORD ?: ( settings.env[ "lucee.admin.password" ] ?: "" ) );
 	}
 
 	private void function _setupEnums( settings ) {
-		settings.enum.luceeDebugFeatures     = [ "database", "queryusage", "dump", "exception", "timer", "tracing" ];
+		settings.enum.luceeDebugFeatures     = [ "database", "queryUsage", "template", "dump", "exception", "timer", "tracing", "implicitAccess", "thread" ];
 		settings.enum.luceeDebugRequestTypes = [ "http", "task", "adhoctask" ];
 	}
 
