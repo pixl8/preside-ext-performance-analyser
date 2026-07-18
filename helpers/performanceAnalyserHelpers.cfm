@@ -14,6 +14,24 @@
 	</cfscript>
 </cffunction>
 
+<cffunction name="perfAnalyserPrettySrc" access="public" returntype="string" output="false">
+	<cfargument name="templatePath" type="string" required="true" />
+	<cfargument name="methodName"   type="string" required="false" default="-" />
+	<cfscript>
+		var src = arguments.templatePath;
+
+		src = ReReplaceNoCase( src, "^.*?[/\\]website[/\\]", "" );
+		src = ReReplaceNoCase( src, "^.*?[/\\]application[/\\]", "application/" );
+		src = Replace( src, "\", "/", "all" );
+
+		if ( Len( Trim( arguments.methodName ) ) && arguments.methodName != "-" ) {
+			return src & " $" & arguments.methodName;
+		}
+
+		return src;
+	</cfscript>
+</cffunction>
+
 <cffunction name="perfAnalyserWidgetBox" access="public" returntype="string" output="false">
 	<cfargument name="title" type="string" required="true" />
 	<cfargument name="icon" type="string" required="true" />

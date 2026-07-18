@@ -19,8 +19,6 @@ component extends="preside.system.base.AdminHandler" {
 
 // PUBLIC ACTIONS
 	public void function index() {
-		// dump( luceeAdminApiWrapper.call( "getDebug" ) );abort;
-
 		prc.pageTitle = translateResource( "performanceanalyser:admin.homepage.title" );
 
 		prc.tabs = [ "debugger", "threads", "heapdumps" ];
@@ -137,10 +135,10 @@ component extends="preside.system.base.AdminHandler" {
 		}
 
 		event.addAdminBreadCrumb( title=translateResource( uri="performanceanalyser:breadcrumb.debugger" ), link=event.buildAdminLink( linkto="performanceanalyser", querystring="tab=debugger" ) );
-		event.addAdminBreadCrumb( title=translateResource( uri="performanceanalyser:breadcrumb.debuglog", data=[ rc.logId ] ), link=event.buildAdminLink( linkto="performanceanalyser", querystring="tab=debugger&logid=#logId#" ) );
+		event.addAdminBreadCrumb( title=translateResource( uri="performanceanalyser:breadcrumb.debuglog", data=[ logId ] ), link=event.buildAdminLink( linkto="performanceanalyser.debugLogDetail", querystring="logId=#logId#" ) );
 
 		prc.pageTitle = translateResource( uri="performanceanalyser:page.debuglog.detail.title", data=[ logId ] );
-		prc.iconClass = "fa-search";
+		prc.pageIcon  = "fa-search";
 	}
 
 // PRIVATE VIEWLETS, ETC

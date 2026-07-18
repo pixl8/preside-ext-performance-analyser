@@ -157,6 +157,53 @@ component {
 		return {};
 	}
 
+	public struct function getDebugLogDetail( required string logId ) {
+		if ( !Len( Trim( arguments.logId ) ) || !IsNumeric( arguments.logId ) ) {
+			return {};
+		}
+
+		var logQuery = reqLogDao.selectData(
+			  id           = arguments.logId
+			, selectFields = [
+				  "id"
+				, "type"
+				, "url"
+				, "total_time"
+				, "query_time"
+				, "web_user"
+				, "admin_user"
+				, "datecreated"
+			  ]
+		);
+
+		if ( !logQuery.recordCount ) {
+			return {};
+		}
+
+		var detail = {
+			  id          = logQuery.id
+			, type        = logQuery.type
+			, url         = logQuery.url
+			, total_time  = logQuery.total_time
+			, query_time  = logQuery.query_time
+			, web_user    = logQuery.web_user
+			, admin_user  = logQuery.admin_user
+			, datecreated = logQuery.datecreated
+			, queries     = queryDao.selectData(
+				  filter  = { req=arguments.logId }
+				, orderBy = "exec_time desc"
+			  )
+			, execs       = execTimeDao.selectData(
+				  filter  = { req=arguments.logId }
+				, orderBy = "total_time desc"
+			  )
+		};
+
+		detail.query_count = detail.queries.recordCount;
+
+		return detail;
+	}
+
 	public void function log(
 		  pageUrl   = "/"
 		, adminuser = ""
@@ -305,37 +352,40 @@ component {
 		var event     = $getRequestContext();
 
 		if ( arguments.type == "task" || arguments.type == "adhoctask" ) {
-			return StructKeyExists( settings, "includetasks" ) && IsBoolean( settings.includetasks ) && settings.includetasks;
+			return $helpers.isTrue( settings.includetasks ?: "" );
 		}
 
-		if ( Len( settings.onlyforips ?: "" ) ) {
+		if ( Len( Trim( settings.onlyforips ?: "" ) ) ) {
 			shouldLog = false;
 
 			var clientIp = event.getClientIp();
 			for( var ip in ListToArray( settings.onlyforips, Chr( 10 ) & Chr( 13 ) ) ) {
-				if ( Trim( ip ) == clientIp ) {
+				ip = Trim( ip );
+				if ( Len( ip ) && ip == clientIp ) {
 					shouldLog = true;
 					break;
 				}
 			}
 		}
 
-		if ( shouldLog && Len( settings.onlyforurls ?: "" ) ) {
+		if ( shouldLog && Len( Trim( settings.onlyforurls ?: "" ) ) ) {
 			shouldLog = false;
 
-			var currentUrl = event.getCurrentUrl( includeQueryString=false );
+			var currentUrl = Len( arguments.pageurl ) ? arguments.pageurl : event.getCurrentUrl( includeQueryString=false );
 			for( var urlPattern in ListToArray( settings.onlyforurls, Chr( 10 ) & Chr( 13 ) ) ) {
-				if ( ReFindNoCase( Trim( urlPattern ), currentUrl ) ) {
+				urlPattern = Trim( urlPattern );
+				if ( Len( urlPattern ) && ReFindNoCase( urlPattern, currentUrl ) ) {
 					shouldLog = true;
 					break;
 				}
 			}
 		}
 
-		if ( shouldLog && Len( settings.excludeurls ?: "" ) ) {
-			var currentUrl = event.getCurrentUrl( includeQueryString=false );
+		if ( shouldLog && Len( Trim( settings.excludeurls ?: "" ) ) ) {
+			var currentUrl = Len( arguments.pageurl ) ? arguments.pageurl : event.getCurrentUrl( includeQueryString=false );
 			for( var urlPattern in ListToArray( settings.excludeurls, Chr( 10 ) & Chr( 13 ) ) ) {
-				if ( ReFindNoCase( Trim( urlPattern ), currentUrl ) ) {
+				urlPattern = Trim( urlPattern );
+				if ( Len( urlPattern ) && ReFindNoCase( urlPattern, currentUrl ) ) {
 					shouldLog = false;
 					break;
 				}

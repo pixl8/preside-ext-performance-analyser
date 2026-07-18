@@ -11,13 +11,31 @@ component extends="coldbox.system.Interceptor" {
 	/**
 	 * ColdBox end-of-request point (NOT Application.cfc onRequestEnd —
 	 * that name is never announced as an interception state).
+	 *
+	 * Scheduled taskmanager tasks run via private runEvent without
+	 * prepostExempt, so they hit this point too. Adhoc tasks use
+	 * prepostExempt=true and are not captured here.
 	 */
 	public void function postProcess( event ) {
 		try {
+			var type      = "http";
+			var pageUrl   = event.getCurrentUrl();
+			var adminUser = event.getAdminUserId();
+			var webUser   = _safeWebUserId();
+
+			if ( Len( event.getValue( name="_runningAdhocTaskId", defaultValue="", private=true ) ) ) {
+				type    = "adhoctask";
+				pageUrl = event.getCurrentEvent();
+			} else if ( event.isBackgroundThread() ) {
+				type    = "task";
+				pageUrl = event.getCurrentEvent();
+			}
+
 			luceeDebuggingService.get().log(
-				  pageUrl   = event.getCurrentUrl()
-				, adminuser = event.getAdminUserId()
-				, webuser   = _safeWebUserId()
+				  pageUrl   = pageUrl
+				, adminuser = adminUser
+				, webuser   = webUser
+				, type      = type
 			);
 		} catch ( any e ) {
 			writeLog(
