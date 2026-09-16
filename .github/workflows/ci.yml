@@ -26,20 +26,6 @@ jobs:
       - name: Install dependencies
         uses: pixl8/github-action-box-install@v2
 
-      # Uncomment to use test flow
-      # - name: Run tests
-      #   uses: pixl8/github-action-box-test@v3
-      #   with:
-      #     test_dir: /tests
-      #     test_server_json: /server-tests.json
-      #     output_file: /tests/test-results.txt
-
-      # - name: Upload test results
-      #   uses: actions/upload-artifact@v1
-      #   with:
-      #     name: test-results
-      #     path: tests/test-results.txt
-
       - name: Generate release version number
         if: "env.PUBLISH == 'true'"
         id: versiongen
@@ -54,17 +40,14 @@ jobs:
         env:
           VERSION_NUMBER: ${{ steps.versiongen.outputs.semver_release_string }}
 
-      # Uncomment to build static assets
-      # with grunt
-      #
-      # - name: Build static assets with grunt
-      #   if: "env.PUBLISH == 'true'"
-      #   shell: bash
-      #   run: |
-      #     cd assets &&
-      #     npm install &&
-      #     grunt &&
-      #     rm -rf node_modules
+      - name: Build static assets with grunt
+        if: "env.PUBLISH == 'true'"
+        shell: bash
+        run: |
+          cd assets &&
+          npm install &&
+          grunt &&
+          rm -rf node_modules
 
       - name: Zip project
         if: "env.PUBLISH == 'true'"
@@ -76,14 +59,14 @@ jobs:
       - name: Create Release
         if: "env.PUBLISH == 'true'"
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ steps.versiongen.outputs.semver_release_string }}
-          draft: false
+          token: ${{ secrets.RELEASE_PAT }}
+          tag_name: ${{ steps.versiongen.outputs.semver_release_string }}
+          name: Release ${{ steps.versiongen.outputs.semver_release_string }}
+          target_commitish: ${{ github.sha }}
           prerelease: ${{ steps.versiongen.outputs.semver_release_is_snapshot }}
+          files: ${{ steps.versiongen.outputs.semver_release_number }}.zip
 
       - name: Upload Release Asset
         if: "env.PUBLISH == 'true'"
