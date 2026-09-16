@@ -1,33 +1,27 @@
 <cfscript>
-	canControlAdmin  = isTrue( prc.canControlAdmin  ?: "" );
-	debugSettings    = isTrue( prc.debugSettings    ?: "" );
-	debuggingEnabled = isTrue( prc.debuggingEnabled ?: "" );
+	activeTab  = prc.tab ?: ""
+	tabs       = prc.tabs ?: [];
+	tabContent = prc.tabContent ?: "";
+	baseLink   = event.buildAdminLink( linkto="performanceAnalyser", queryString="tab=${tab}" );
 </cfscript>
 
 <cfoutput>
-	<cfif !canControlAdmin>
-		<div class="alert alert-danger">
-			<p><strong>
-				<i class="fa fa-fw fa-exclamation-triangle"></i>
-				#translateResource( "performanceanalyser:admin.access.denied.title" )#
-			</strong></p>
-			<p>#translateResource( "performanceanalyser:admin.access.denied.description" )#</p>
+	<div class="tabbable">
+		<ul class="nav nav-tabs">
+			<cfloop array="#tabs#" index="tab">
+				<li<cfif tab eq activeTab> class="active"</cfif>>
+					<a href="#replace( baselink, '${tab}', tab)#">
+						<i class="fa fa-fw #translateResource( 'performanceAnalyser:tab.#tab#.iconClass' )#"></i>&nbsp;
+						#translateResource( 'performanceAnalyser:tab.#tab#.title' )#
+					</a>
+				</li>
+			</cfloop>
+		</ul>
+
+		<div class="tab-content">
+			<div class="tab-pane active">
+				#tabContent#
+			</div>
 		</div>
-	<cfelseif !debuggingEnabled>
-		<div class="alert alert-warning">
-			<p><strong>
-				<i class="fa fa-fw fa-exclamation-triangle"></i>
-				#translateResource( "performanceanalyser:debugging.disabled.title" )#
-			</strong></p>
-			<p>#translateResource( "performanceanalyser:debugging.disabled.description" )#</p>
-		</div>
-	<cfelse>
-		<div class="alert alert-warning">
-			<p><strong>
-				<i class="fa fa-fw fa-info-circle"></i>
-				#translateResource( "performanceanalyser:debugging.enabled.title" )#
-			</strong></p>
-			<p>#translateResource( "performanceanalyser:debugging.enabled.description" )#</p>
-		</div>
-	</cfif>
+	</div>
 </cfoutput>
