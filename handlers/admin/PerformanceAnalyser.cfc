@@ -1,9 +1,10 @@
 component extends="preside.system.base.AdminHandler" {
 
-	property name="luceeDebuggingService" inject="luceeDebuggingService";
-	property name="luceeAdminApiWrapper"  inject="luceeAdminApiWrapper";
-	property name="heapDumpService"       inject="heapDumpService";
-	property name="luceeDebugFeatures"    inject="coldbox:setting:enum.luceeDebugFeatures";
+	property name="luceeDebuggingService"            inject="luceeDebuggingService";
+	property name="luceeAdminApiWrapper"             inject="luceeAdminApiWrapper";
+	property name="heapDumpService"                  inject="heapDumpService";
+	property name="performanceAnalyserThreadsService" inject="performanceAnalyserThreadsService";
+	property name="luceeDebugFeatures"               inject="coldbox:setting:enum.luceeDebugFeatures";
 
 	function preHandler( event, rc, prc ) {
 		super.preHandler( argumentCollection=arguments );
@@ -141,6 +142,13 @@ component extends="preside.system.base.AdminHandler" {
 		prc.pageIcon  = "fa-search";
 	}
 
+	public void function threadsSnapshot() {
+		event.renderData(
+			  type = "json"
+			, data = performanceAnalyserThreadsService.getThreadSnapshot()
+		);
+	}
+
 // PRIVATE VIEWLETS, ETC
 	private string function topRightButtons() {
 		var buttons = [];
@@ -177,7 +185,11 @@ component extends="preside.system.base.AdminHandler" {
 		return renderView( view="/admin/performanceAnalyser/_debuggerTab", args=args );
 	}
 
-	private string function _threadsTab() {
-		return '<p class="text-center">TODO: something really awesome here!</p>';
+	private string function _threadsTab( event, rc, prc, args={} ) {
+		event.include( "/js/admin/specific/performanceanalyserthreads/" );
+
+		args.snapshotUrl = event.buildAdminLink( linkto="performanceanalyser.threadsSnapshot" );
+
+		return renderView( view="/admin/performanceAnalyser/_threadsTab", args=args );
 	}
 }
