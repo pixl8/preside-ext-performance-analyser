@@ -1,8 +1,10 @@
 component extends="preside.system.base.AdminHandler" {
 
-	property name="performanceAnalyserService" inject="performanceAnalyserService";
-	property name="luceeAdminApiWrapper"       inject="luceeAdminApiWrapper";
-	property name="luceeDebugFeatures"         inject="coldbox:setting:enum.luceeDebugFeatures";
+	property name="luceeDebuggingService"            inject="luceeDebuggingService";
+	property name="luceeAdminApiWrapper"             inject="luceeAdminApiWrapper";
+	property name="heapDumpService"                  inject="heapDumpService";
+	property name="performanceAnalyserThreadsService" inject="performanceAnalyserThreadsService";
+	property name="luceeDebugFeatures"               inject="coldbox:setting:enum.luceeDebugFeatures";
 
 	function preHandler( event, rc, prc ) {
 		super.preHandler( argumentCollection=arguments );
@@ -20,11 +22,13 @@ component extends="preside.system.base.AdminHandler" {
 	public void function index() {
 		prc.pageTitle = translateResource( "performanceanalyser:admin.homepage.title" );
 
-		if ( prc.canControlAdmin ){
-			prc.debugSettings    = performanceAnalyserService.getDebugSettings();
-			prc.debuggingEnabled = isTrue( prc.debugSettings.debug ?: "" );
-		}
+		prc.tabs = [ "debugger", "threads", "heapdumps" ];
+		prc.tab = rc.tab ?: "";
 
+		if ( !ArrayFindNoCase( prc.tabs, prc.tab ) ) {
+			prc.tab = prc.tabs[ 1 ];
+		}
+		prc.tabContent = renderViewlet( event="admin.performanceAnalyser._#prc.tab#Tab" );
 		prc.topRightButtons = renderViewlet( "admin.performanceanalyser.topRightButtons" );
 	}
 
@@ -36,14 +40,23 @@ component extends="preside.system.base.AdminHandler" {
 		prc.pageTitle = translateResource( "performanceanalyser:edit.settings.page.title" );
 		event.addAdminBreadCrumb( title=translateResource( "performanceanalyser:edit.settings.page.breadcrumb" ), link="" );
 
-		var rawSettings = performanceAnalyserService.getDebugSettings();
+		var rawSettings = luceeDebuggingService.getDebugSettings();
+
+		var templateIpRange = Trim( rawSettings.templateSettings.ipRange ?: "" );
+		if ( templateIpRange == "*" ) {
+			templateIpRange = "";
+		}
 
 		prc.debugSettings = {
-			  debug       = rawSettings.debug
-			, maxlogs     = rawSettings.maxLogs
-			, showlogs    = ( rawSettings.templateSettings.type ?: "" ) != "performance-analyser-empty"
-			, ipaddresses = ( rawSettings.templateSettings.ipRange ?: cgi.remote_addr )
-			, features    = []
+			  debug           = rawSettings.debug
+			, showlogs        = IsTrue( rawSettings.showlogs ?: "" )
+			, ipaddresses     = templateIpRange
+			, features        = []
+			, storageduration = rawSettings.storageduration
+			, includetasks    = rawSettings.includetasks
+			, onlyforips      = rawSettings.onlyforips
+			, onlyforurls     = rawSettings.onlyforurls
+			, excludeurls     = rawSettings.excludeurls
 		};
 
 		for( var feature in luceeDebugFeatures ) {
@@ -52,6 +65,8 @@ component extends="preside.system.base.AdminHandler" {
 			}
 		}
 		prc.debugSettings.features = ArrayToList( prc.debugSettings.features );
+
+		event.include( "/js/admin/specific/performanceanalysersettings/" )
 
 		prc.formName   = "performance.analyser.settings";
 		prc.postAction = event.buildAdminLink( linkto="performanceanalyser.editSettingsAction" );
@@ -78,12 +93,16 @@ component extends="preside.system.base.AdminHandler" {
 			);
 		}
 
-		performanceAnalyserService.saveDebugSettings(
-			  debug       = isTrue( formData.debug ?: "" )
-			, maxlogs     = Val( formData.maxlogs ?: 10 )
-			, features    = ListToArray( formData.features ?: "" )
-			, showlogs    = isTrue( formData.showlogs ?: "" )
-			, ipaddresses = formData.ipaddresses ?: cgi.remote_addr
+		luceeDebuggingService.saveDebugSettings(
+			  debug           = isTrue( formData.debug ?: "" )
+			, features        = ListToArray( formData.features ?: "" )
+			, showlogs        = isTrue( formData.showlogs ?: "" )
+			, ipaddresses     = formData.ipaddresses ?: cgi.remote_addr
+			, storageduration = Val( formData.storageduration ?: 1 )
+			, includetasks    = isTrue( formData.includetasks ?: "" )
+			, onlyforips      = formData.onlyforips ?: ""
+			, onlyforurls     = formData.onlyforurls ?: ""
+			, excludeurls     = formData.excludeurls ?: ""
 		);
 
 		event.audit(
@@ -98,14 +117,79 @@ component extends="preside.system.base.AdminHandler" {
 		setNextEvent( url=event.buildAdminLink( linkto="performanceanalyser" ) );
 	}
 
-// PRIVATE VIEWLETS, ETC
-	private string function topRightButtons() {
-		if ( IsTrue( prc.canControlAdmin ?: "" ) ) {
-			var link    = event.buildAdminLink( linkto="performanceanalyser.editsettings" );
-			var btnText = translateResource( "performanceanalyser:edit.debug.settings.btn" );
-
-			return '<a href="#link#" class="btn btn-default"><i class="fa fa-cogs"></i> #btnText#</a>';
+	public void function takeHeapdumpAction() {
+		if ( !prc.canControlAdmin ) {
+			event.adminAccessDenied();
 		}
+
+		setNextEvent( url=heapDumpService.getHeapDump() );
 	}
 
+	public void function debugLogDetail() {
+		var logId = Trim( rc.logId ?: "" );
+
+		prc.debugLogDetail = luceeDebuggingService.getDebugLogDetail( logId );
+
+		if ( StructIsEmpty( prc.debugLogDetail ) ) {
+			messagebox.warning( translateResource( "performanceanalyser:log.not.found" ) );
+			setNextEvent( url=event.buildAdminLink( linkto="performanceanalyser", querystring="tab=debugger" ) );
+		}
+
+		event.addAdminBreadCrumb( title=translateResource( uri="performanceanalyser:breadcrumb.debugger" ), link=event.buildAdminLink( linkto="performanceanalyser", querystring="tab=debugger" ) );
+		event.addAdminBreadCrumb( title=translateResource( uri="performanceanalyser:breadcrumb.debuglog", data=[ logId ] ), link=event.buildAdminLink( linkto="performanceanalyser.debugLogDetail", querystring="logId=#logId#" ) );
+
+		prc.pageTitle = translateResource( uri="performanceanalyser:page.debuglog.detail.title", data=[ logId ] );
+		prc.pageIcon  = "fa-search";
+	}
+
+	public void function threadsSnapshot() {
+		event.renderData(
+			  type = "json"
+			, data = performanceAnalyserThreadsService.getThreadSnapshot()
+		);
+	}
+
+// PRIVATE VIEWLETS, ETC
+	private string function topRightButtons() {
+		var buttons = [];
+
+		if ( IsTrue( prc.canControlAdmin ?: "" ) ) {
+			ArrayAppend( buttons, {
+				  link      = event.buildAdminLink( linkto="performanceanalyser.editsettings" )
+				, title     = translateResource( "performanceanalyser:edit.debug.settings.btn" )
+				, iconClass = "fa-cogs"
+				, btnClass  = "btn-primary"
+			} );
+
+			ArrayAppend( buttons, {
+				  link      = event.buildAdminLink( linkto="performanceanalyser.takeHeapdumpAction" )
+				, title     = translateResource( "performanceanalyser:heap.dump.btn" )
+				, iconClass = "fa-download"
+				, btnClass  = "btn-secondary"
+			} );
+		}
+
+		for( var i=1; i<=ArrayLen( buttons ); i++) {
+			buttons[ i ] = renderView( view="/admin/datamanager/_topRightButton", args=buttons[ i ] );
+		}
+
+		return ArrayToList( buttons, " " );
+	}
+
+	private string function _debuggerTab( event, rc, prc, args={} ) {
+		if ( prc.canControlAdmin ){
+			args.debugSettings    = luceeDebuggingService.getDebugSettings();
+			args.debuggingEnabled = IsTrue( args.debugSettings.debug ?: "" );
+		}
+
+		return renderView( view="/admin/performanceAnalyser/_debuggerTab", args=args );
+	}
+
+	private string function _threadsTab( event, rc, prc, args={} ) {
+		event.include( "/js/admin/specific/performanceanalyserthreads/" );
+
+		args.snapshotUrl = event.buildAdminLink( linkto="performanceanalyser.threadsSnapshot" );
+
+		return renderView( view="/admin/performanceAnalyser/_threadsTab", args=args );
+	}
 }

@@ -8,6 +8,7 @@ component {
 		_setupNavigation( settings );
 		_setupExtensionSettings( settings );
 		_setupEnums( settings );
+		_setupInterceptors( conf );
 	}
 
 	private void function _setupPermissions( settings ) {
@@ -31,10 +32,15 @@ component {
 	private void function _setupExtensionSettings( settings ) {
 		settings.performanceAnalyser = settings.performanceAnalyser ?: {};
 
-		settings.performanceAnalyser.luceeAdminPassword = settings.performanceAnalyser.luceeAdminPassword ?: ( settings.env.LUCEE_ADMIN_PASSWORD ?: "" );
+		settings.performanceAnalyser.luceeAdminPassword = settings.performanceAnalyser.luceeAdminPassword ?: ( settings.env.LUCEE_ADMIN_PASSWORD ?: ( settings.env[ "lucee.admin.password" ] ?: "" ) );
 	}
 
 	private void function _setupEnums( settings ) {
-		settings.enum.luceeDebugFeatures = [ "database", "queryusage", "dump", "exception", "timer", "tracing" ];
+		settings.enum.luceeDebugFeatures     = [ "database", "queryUsage", "template", "dump", "exception", "timer", "tracing", "implicitAccess", "thread" ];
+		settings.enum.luceeDebugRequestTypes = [ "http", "task", "adhoctask" ];
+	}
+
+	private void function _setupInterceptors( config ) {
+		ArrayAppend( config.interceptors, { class="app.extensions.preside-ext-performance-analyser.interceptors.PerformanceAnalyserInterceptor", properties={} } );
 	}
 }
