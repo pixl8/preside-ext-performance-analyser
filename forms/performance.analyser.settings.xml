@@ -2,8 +2,9 @@
 <form i18nBaseUri="performanceanalyser:settings.form.">
 	<tab id="basic" sortorder="10">
 		<fieldset id="logging" sortorder="10">
-			<field name="debug"      control="yesnoswitch" sortorder="10" />
-			<field name="features"   control="enumRadioList" multiple="true" enum="luceeDebugFeatures" sortorder="20" />
+			<field name="debug"           control="yesnoswitch"   sortorder="10" />
+			<field name="features"        control="enumRadioList" multiple="true" enum="luceeDebugFeatures" sortorder="20" />
+			<field name="trackallocation" control="yesnoswitch"   defaultValue="false" sortorder="30" />
 		</fieldset>
 		<fieldset id="display" sortorder="20">
 			<field name="showlogs"    control="yesnoswitch" sortorder="10" />
