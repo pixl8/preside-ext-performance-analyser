@@ -8,6 +8,7 @@ component {
 	property name="reqLogDao"          inject="presidecms:object:perfanalyser_req_log";
 	property name="queryDao"           inject="presidecms:object:perfanalyser_req_log_query";
 	property name="execTimeDao"        inject="presidecms:object:perfanalyser_req_log_exec";
+	property name="allocDao"           inject="presidecms:object:perfanalyser_req_log_alloc";
 	property name="sqlRunner"          inject="sqlRunner";
 	property name="luceeDebugFeatures" inject="coldbox:setting:enum.luceeDebugFeatures";
 
@@ -23,6 +24,7 @@ component {
 		settings.templateSettings = getDebugTemplate();
 		settings.storageduration  = Val( sysConfig.storageduration ?: 1 );
 		settings.includetasks     = $helpers.isTrue( sysConfig.includetasks ?: "" );
+		settings.trackallocation  = $helpers.isTrue( sysConfig.trackallocation ?: "" );
 		settings.onlyforips       = sysConfig.onlyforips  ?: "";
 		settings.onlyforurls      = sysConfig.onlyforurls ?: "";
 		settings.excludeurls      = sysConfig.excludeurls ?: "";
@@ -79,6 +81,7 @@ component {
 		, required string  onlyforips
 		, required string  onlyforurls
 		, required string  excludeurls
+		, required boolean trackallocation
 	) {
 		var debugSettings = { debug=arguments.debug, debugTemplate="" };
 
@@ -144,7 +147,8 @@ component {
 		$getSystemConfigurationService().saveSetting( category="performanceAnalyserDebug", setting="includetasks"   , value=arguments.includetasks );
 		$getSystemConfigurationService().saveSetting( category="performanceAnalyserDebug", setting="onlyforips"     , value=arguments.onlyforips );
 		$getSystemConfigurationService().saveSetting( category="performanceAnalyserDebug", setting="onlyforurls"    , value=arguments.onlyforurls );
-		$getSystemConfigurationService().saveSetting( category="performanceAnalyserDebug", setting="excludeurls"    , value=arguments.excludeurls );
+		$getSystemConfigurationService().saveSetting( category="performanceAnalyserDebug", setting="excludeurls"     , value=arguments.excludeurls );
+		$getSystemConfigurationService().saveSetting( category="performanceAnalyserDebug", setting="trackallocation" , value=arguments.trackallocation );
 	}
 
 	public function getDebugTemplate() {
@@ -197,6 +201,10 @@ component {
 				  filter  = { req=arguments.logId }
 				, orderBy = "total_time desc"
 			  )
+			, allocs      = allocDao.selectData(
+				  filter  = { req=arguments.logId }
+				, orderBy = "exclusive_bytes desc"
+			  )
 		};
 
 		detail.query_count = detail.queries.recordCount;
@@ -205,10 +213,11 @@ component {
 	}
 
 	public void function log(
-		  pageUrl   = "/"
-		, adminuser = ""
-		, webuser   = ""
-		, type      = "http"
+		  pageUrl     = "/"
+		, adminuser   = ""
+		, webuser     = ""
+		, type        = "http"
+		, allocations = []
 	) {
 		if ( !isDebugLoggingEnabled() || !_shouldLogRequest( type=arguments.type, pageUrl=arguments.pageUrl ) ) {
 			return;
@@ -237,6 +246,7 @@ component {
 
 		_logQueries( logId, debugData.queries ?: [] );
 		_logExecutionTimes( logId, debugData.pages ?: [] );
+		_logAllocations( logId, arguments.allocations ?: [] );
 	}
 
 	public boolean function cleanupOldLogs( logger ) {
@@ -325,6 +335,38 @@ component {
 		}
 	}
 
+	private function _logAllocations( logId, allocations ) {
+		var params  = [];
+		var counter = 0;
+
+		if ( !IsArray( arguments.allocations ) || !ArrayLen( arguments.allocations ) ) {
+			return;
+		}
+
+		for( var row in arguments.allocations ) {
+			ArrayAppend( params, { type="cf_sql_bigint" , value=arguments.logId                 } );
+			ArrayAppend( params, { type="cf_sql_varchar", value=Left( row.kind ?: "", 20 )      } );
+			ArrayAppend( params, { type="cf_sql_varchar", value=Left( row.name ?: "", 255 )     } );
+			ArrayAppend( params, { type="cf_sql_int"    , value=Val( row.call_count ?: 0 )      } );
+			ArrayAppend( params, { type="cf_sql_bigint" , value=Val( row.inclusive_bytes ?: 0 ) } );
+			ArrayAppend( params, { type="cf_sql_bigint" , value=Val( row.exclusive_bytes ?: 0 ) } );
+			ArrayAppend( params, { type="cf_sql_bigint" , value=Val( row.max_inclusive ?: 0 )   } );
+			ArrayAppend( params, { type="cf_sql_bigint" , value=Val( row.max_exclusive ?: 0 )   } );
+			ArrayAppend( params, { type="cf_sql_varchar", value=Left( row.path_hash ?: "", 32 ) } );
+			ArrayAppend( params, { type="cf_sql_varchar", value=Left( row.parent_hash ?: "", 32 ) } );
+
+			if ( ++counter == 100 ) {
+				sqlRunner.runSql( dsn=allocDao.getDsn(), sql=_getInsertAllocSql( counter ), params=params );
+				counter = 0;
+				params  = [];
+			}
+		}
+
+		if ( counter > 0 ) {
+			sqlRunner.runSql( dsn=allocDao.getDsn(), sql=_getInsertAllocSql( counter ), params=params );
+		}
+	}
+
 	private function _getInsertQueriesSql( rows ) {
 		if ( !StructKeyExists( variables, "_insertQueriesHeader" ) ) {
 			var adapter = queryDao.getDbAdapter();
@@ -344,6 +386,17 @@ component {
 		}
 
 		return variables._insertExecTimesHeader & RepeatString( ", (?,?,?,?,?,?,?,?,?)", arguments.rows-1 );
+	}
+
+	private function _getInsertAllocSql( rows ) {
+		if ( !StructKeyExists( variables, "_insertAllocHeader" ) ) {
+			var adapter   = allocDao.getDbAdapter();
+			var insertSql = adapter.getInsertSql( allocDao.getTableName(), [ "req", "kind", "name", "call_count", "inclusive_bytes", "exclusive_bytes", "max_inclusive", "max_exclusive", "path_hash", "parent_hash" ] );
+
+			variables._insertAllocHeader = ReReplace( insertSql[ 1 ], "values \(.*$", "values (?,?,?,?,?,?,?,?,?,?)" );
+		}
+
+		return variables._insertAllocHeader & RepeatString( ", (?,?,?,?,?,?,?,?,?,?)", arguments.rows-1 );
 	}
 
 	private function _shouldLogRequest( type, pageurl ) {

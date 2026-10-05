@@ -57,6 +57,7 @@ component extends="preside.system.base.AdminHandler" {
 			, onlyforips      = rawSettings.onlyforips
 			, onlyforurls     = rawSettings.onlyforurls
 			, excludeurls     = rawSettings.excludeurls
+			, trackallocation = IsTrue( rawSettings.trackallocation ?: "" )
 		};
 
 		for( var feature in luceeDebugFeatures ) {
@@ -103,6 +104,7 @@ component extends="preside.system.base.AdminHandler" {
 			, onlyforips      = formData.onlyforips ?: ""
 			, onlyforurls     = formData.onlyforurls ?: ""
 			, excludeurls     = formData.excludeurls ?: ""
+			, trackallocation = isTrue( formData.trackallocation ?: "" )
 		);
 
 		event.audit(

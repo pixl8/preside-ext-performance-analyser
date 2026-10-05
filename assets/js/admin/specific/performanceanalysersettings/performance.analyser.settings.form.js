@@ -3,6 +3,7 @@
 	var $debugEnabledRadio = $( "#debug" )
 	  , $showLogsRadio = $( "#showlogs" )
 	  , $featuresField = $( "[name=features]" ).first().closest( ".form-group" )
+	  , $trackAllocationField = $( "#trackallocation" ).closest( ".form-group" )
 	  , $ipaddressesField = $( "#ipaddresses" ).closest( ".form-group" )
 	  , $displayFieldset = $( "#fieldset-display" )
 	  , toggleFeatures, togglePageDisplayFeatures;
@@ -11,10 +12,12 @@
 		toggleEnabledFeatures = function(){
 			if ( $debugEnabledRadio.is( ":checked" ) ) {
 				$featuresField.show();
+				$trackAllocationField.show();
 				$displayFieldset.show();
 				togglePageDisplayFeatures();
 			} else {
 				$featuresField.hide();
+				$trackAllocationField.hide();
 				$displayFieldset.hide();
 			}
 		};

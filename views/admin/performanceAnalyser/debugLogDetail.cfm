@@ -2,7 +2,15 @@
 	detail           = prc.debugLogDetail ?: {};
 	queryCount       = IsQuery( detail.queries ?: "" ) ? detail.queries.recordCount : 0;
 	execCount        = IsQuery( detail.execs   ?: "" ) ? detail.execs.recordCount   : 0;
+	allocCount       = IsQuery( detail.allocs  ?: "" ) ? detail.allocs.recordCount  : 0;
 	slowThresholdNs  = 100 * 1000 * 1000; // 100ms
+	totalMemory      = 0;
+
+	if ( allocCount ) {
+		for ( var alloc in detail.allocs ) {
+			totalMemory += Val( alloc.exclusive_bytes ?: 0 );
+		}
+	}
 </cfscript>
 
 <cfoutput>
@@ -22,6 +30,11 @@
 
 			<dt>#translateResource( "performanceanalyser:detail.summary.querytime" )#</dt>
 			<dd>#perfAnalyserPrettyTime( Val( detail.query_time ?: 0 ) )# ms (#NumberFormat( Val( detail.query_count ?: queryCount ) )# #translateResource( "performanceanalyser:detail.summary.queries" )#)</dd>
+
+			<cfif allocCount>
+				<dt>#translateResource( "performanceanalyser:detail.summary.memory" )#</dt>
+				<dd>#perfAnalyserPrettyBytes( totalMemory )#</dd>
+			</cfif>
 
 			<cfif Len( detail.admin_user ?: "" )>
 				<dt>#translateResource( "performanceanalyser:detail.summary.adminuser" )#</dt>
@@ -43,6 +56,12 @@
 				</a>
 			</li>
 			<li>
+				<a data-toggle="tab" href="##allocations">
+					<i class="fa fa-fw fa-bar-chart"></i>&nbsp;
+					#translateResource( uri="performanceanalyser:page.debuglog.detail.allocations.tab", data=[ allocCount ] )#
+				</a>
+			</li>
+			<li>
 				<a data-toggle="tab" href="##queries">
 					<i class="fa fa-fw fa-database"></i>&nbsp;
 					#translateResource( uri="performanceanalyser:page.debuglog.detail.queries.tab", data=[ queryCount ] )#
@@ -53,6 +72,9 @@
 		<div class="tab-content">
 			<div class="tab-pane active" id="exectimes">
 				#renderView( view="/admin/performanceAnalyser/debugLogDetail/_executionTimes", args={ execs=detail.execs ?: QueryNew( '' ), slowThresholdNs=slowThresholdNs } )#
+			</div>
+			<div class="tab-pane" id="allocations">
+				#renderView( view="/admin/performanceAnalyser/debugLogDetail/_allocations", args={ allocs=detail.allocs ?: QueryNew( '' ) } )#
 			</div>
 			<div class="tab-pane" id="queries">
 				#renderView( view="/admin/performanceAnalyser/debugLogDetail/_queries", args={ queries=detail.queries ?: QueryNew( '' ), slowThresholdNs=slowThresholdNs } )#

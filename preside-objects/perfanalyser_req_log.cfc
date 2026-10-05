@@ -5,7 +5,7 @@
  * @tableprefix                  ""
  * @datamanagerEnabled           true
  * @datamanagerAllowedOperations view,delete,batchdelete
- * @datamanagerGridFields        type,url,total_time,query_time,query_count,datecreated
+ * @datamanagerGridFields        type,url,total_time,query_time,query_count,total_memory,datecreated
  * @datamanagerDefaultSortOrder  datecreated desc
  */
 component {
@@ -21,5 +21,7 @@ component {
 
 	property name="queries" relationship="one-to-many" relatedto="perfanalyser_req_log_query" relationshipKey="req";
 	property name="execs"   relationship="one-to-many" relatedto="perfanalyser_req_log_exec"  relationshipKey="req";
-	property name="query_count" type="numeric" formula="agg:count{ queries.req }";
+	property name="allocs"  relationship="one-to-many" relatedto="perfanalyser_req_log_alloc" relationshipKey="req";
+	property name="query_count"  type="numeric" formula="agg:count{ queries.req }";
+	property name="total_memory" type="numeric" formula="agg:sum{ allocs.exclusive_bytes }" renderer="perfAnalyserBytes" autofilter=false;
 }
