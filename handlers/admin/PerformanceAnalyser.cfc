@@ -14,7 +14,7 @@ component extends="preside.system.base.AdminHandler" {
 		}
 
 		event.addAdminBreadCrumb( title=translateResource( "performanceanalyser:admin.homepage.breadcrumb" ), link=event.buildAdminLink( linkto="performanceanalyser" ) );
-		prc.pageIcon = "fa-bolt";
+		prc.pageIcon = "fa-chart-line";
 		prc.canControlAdmin = luceeAdminApiWrapper.canConnect();
 	}
 
