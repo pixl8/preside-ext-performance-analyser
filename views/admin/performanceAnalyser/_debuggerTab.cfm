@@ -31,46 +31,7 @@
 			</strong></p>
 			<p>#translateResource( "performanceanalyser:debugging.enabled.description" )#</p>
 		</div>
-
-		#objectDataTable( "perfanalyser_req_log" )#
-
-		<!--- <div class="table-responsive">
-			<table class="table table-striped static-data-table">
-				<thead>
-					<tr>
-						<th style="min-width:10em;">#translateResource( "performanceAnalyser:log.summary.th.starttime" )#</th>
-						<th>#translateResource( "performanceAnalyser:log.summary.th.pageinfo" )#</th>
-						<th style="min-width:10em;">#translateResource( "performanceAnalyser:log.summary.th.querycount" )#</th>
-						<th style="min-width:10em;">#translateResource( "performanceAnalyser:log.summary.th.exectime" )#</th>
-						<th style="min-width:5em;">&nbsp;</th>
-					</tr>
-				</thead>
-				<tbody>
-					<cfloop array="#debugLogs#" item="l">
-						<tr class="clickable">
-							<td>#DateTimeFormat( l.started, 'hh:nn:ss' )#</td>
-							<td>
-								<cfif Len( l.url )>
-									<span class="grey">#ListFirst( l.url, "?" )#</span>
-									<cfif ListLen( l.url, "?" ) gt 1>
-										<br>
-										<small class="light-grey">?#ListRest( l.url, "?" )#</small>
-									</cfif>
-								<cfelse>
-									<em class="light-grey">?</em>
-								</cfif>
-							</td>
-							<td>#NumberFormat( l.queries )#</td>
-							<td>#perfAnalyserPrettyTime( l.exectime )# ms</td>
-							<td>
-								<a href="#replace( baseViewLogLink, '{id}', l.id )#">
-									<i class="fa fa-fw fa-search"></i>
-								</a>
-							</td>
-						</tr>
-					</cfloop>
-				</tbody>
-			</table>
-		</div> --->
 	</cfif>
+
+	#objectDataTable( "perfanalyser_req_log" )#
 </cfoutput>
