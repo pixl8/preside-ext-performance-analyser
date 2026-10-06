@@ -22,7 +22,7 @@ component extends="preside.system.base.AdminHandler" {
 	public void function index() {
 		prc.pageTitle = translateResource( "performanceanalyser:admin.homepage.title" );
 
-		prc.tabs = [ "debugger", "threads", "heapdumps" ];
+		prc.tabs = [ "threads", "debugger", "threaddumps", "heapdumps" ];
 		prc.tab = rc.tab ?: "";
 
 		if ( !ArrayFindNoCase( prc.tabs, prc.tab ) ) {
@@ -127,6 +127,31 @@ component extends="preside.system.base.AdminHandler" {
 		setNextEvent( url=heapDumpService.getHeapDump() );
 	}
 
+	public void function takeThreadDumpAction() {
+		var dumpId = performanceAnalyserThreadsService.saveThreadDump();
+
+		setNextEvent( url=event.buildAdminLink( linkto="performanceanalyser.viewThreadDump", querystring="id=#dumpId#" ) );
+	}
+
+	public void function viewThreadDump() {
+		var dumpId = Trim( rc.id ?: "" );
+
+		prc.threadDump = performanceAnalyserThreadsService.getThreadDump( dumpId );
+
+		if ( StructIsEmpty( prc.threadDump ) ) {
+			messagebox.warning( translateResource( "performanceanalyser:threaddump.not.found" ) );
+			setNextEvent( url=event.buildAdminLink( linkto="performanceanalyser", querystring="tab=threaddumps" ) );
+		}
+
+		event.addAdminBreadCrumb( title=translateResource( uri="performanceanalyser:breadcrumb.threaddumps" ), link=event.buildAdminLink( linkto="performanceanalyser", querystring="tab=threaddumps" ) );
+		event.addAdminBreadCrumb( title=prc.threadDump.label, link="" );
+
+		event.include( "/js/admin/specific/performanceanalyserthreaddump/" );
+
+		prc.pageTitle = translateResource( uri="performanceanalyser:page.threaddump.title", data=[ prc.threadDump.label ] );
+		prc.pageIcon  = "fa-list-alt";
+	}
+
 	public void function debugLogDetail() {
 		var logId = Trim( rc.logId ?: "" );
 
@@ -171,6 +196,13 @@ component extends="preside.system.base.AdminHandler" {
 			} );
 		}
 
+		ArrayAppend( buttons, {
+			  link      = event.buildAdminLink( linkto="performanceanalyser.takeThreadDumpAction" )
+			, title     = translateResource( "performanceanalyser:thread.dump.btn" )
+			, iconClass = "fa-list-alt"
+			, btnClass  = "btn-secondary"
+		} );
+
 		for( var i=1; i<=ArrayLen( buttons ); i++) {
 			buttons[ i ] = renderView( view="/admin/datamanager/_topRightButton", args=buttons[ i ] );
 		}
@@ -193,5 +225,9 @@ component extends="preside.system.base.AdminHandler" {
 		args.snapshotUrl = event.buildAdminLink( linkto="performanceanalyser.threadsSnapshot" );
 
 		return renderView( view="/admin/performanceAnalyser/_threadsTab", args=args );
+	}
+
+	private string function _threaddumpsTab( event, rc, prc, args={} ) {
+		return renderView( view="/admin/performanceAnalyser/_threaddumpsTab", args=args );
 	}
 }

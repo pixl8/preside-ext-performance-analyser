@@ -3,67 +3,101 @@
 </cfscript>
 
 <cfoutput>
-	<div class="perf-analyser-threads" data-snapshot-url="#HtmlEditFormat( snapshotUrl )#">
-		<div class="row" style="margin-bottom:1em;">
-			<div class="col-md-8">
-				<div class="btn-group" data-toggle="buttons">
-					<label class="btn btn-sm btn-primary active">
-						<input type="radio" name="threads-view-mode" value="preside" autocomplete="off" checked>
-						#translateResource( "performanceanalyser:threads.view.preside" )#
-					</label>
-					<label class="btn btn-sm btn-primary">
-						<input type="radio" name="threads-view-mode" value="plain" autocomplete="off">
-						#translateResource( "performanceanalyser:threads.view.plain" )#
-					</label>
-				</div>
-				<label class="checkbox-inline" style="margin-left:1em;">
+	<div class="perf-analyser-threads" data-snapshot-url="#HtmlEditFormat( snapshotUrl )#" data-copy-label="#HtmlEditFormat( translateResource( 'performanceanalyser:threads.copy' ) )#" data-copied-label="#HtmlEditFormat( translateResource( 'performanceanalyser:threads.copied' ) )#">
+		<p class="light-grey">#translateResource( "performanceanalyser:threads.intro" )#</p>
+
+		<style>
+			.threads-toolbar {
+				display         : flex;
+				align-items     : center;
+				justify-content : space-between;
+				margin-bottom   : 1em;
+			}
+			.threads-toolbar-controls {
+				display     : flex;
+				align-items : center;
+			}
+			.threads-toolbar .checkbox-inline {
+				padding-top : 0;
+			}
+			.threads-toolbar .threads-refresh-rate {
+				display        : inline-block;
+				width          : auto;
+				margin-left    : 0.75em;
+				vertical-align : middle;
+			}
+			.threads-toolbar .threads-refresh-unit {
+				margin-left : 0.35em;
+			}
+			.threads-toolbar ##threads-refresh-btn {
+				margin-left    : 0.75em;
+				vertical-align : middle;
+			}
+			.thread-identity {
+				display     : flex;
+				align-items : flex-start;
+			}
+			.perf-analyser-threads .thread-identity .thread-toggle,
+			.perf-analyser-threads .thread-identity .thread-identity-icon {
+				display         : flex;
+				align-items     : center;
+				justify-content : center;
+				flex            : 0 0 auto;
+				height          : 1.4286em;
+				margin          : 0;
+				padding         : 0;
+				line-height     : 1;
+				border          : 0;
+			}
+			.perf-analyser-threads .thread-identity .thread-toggle {
+				width        : 1.15em;
+				margin-right : 0.15em;
+			}
+			.perf-analyser-threads .thread-identity .thread-identity-icon {
+				width        : 1.25em;
+				margin-right : 0.4em;
+			}
+			.thread-identity .thread-identity-text {
+				min-width : 0;
+			}
+		</style>
+
+		<div class="threads-toolbar">
+			<div class="threads-toolbar-controls">
+				<label class="checkbox-inline">
 					<input type="checkbox" class="ace" id="threads-autorefresh">
 					<span class="lbl"> #translateResource( "performanceanalyser:threads.autorefresh" )#</span>
 				</label>
-				<button type="button" class="btn btn-sm btn-info" id="threads-refresh-btn" style="margin-left:0.5em;">
+				<select id="threads-refresh-rate" class="form-control input-sm threads-refresh-rate">
+					<option value="1">1</option>
+					<option value="2">2</option>
+					<option value="3">3</option>
+					<option value="5" selected>5</option>
+					<option value="10">10</option>
+				</select>
+				<span class="light-grey threads-refresh-unit">#translateResource( "performanceanalyser:threads.refresh.seconds" )#</span>
+				<button type="button" class="btn btn-sm btn-info" id="threads-refresh-btn">
 					<i class="fa fa-refresh"></i>
 					#translateResource( "performanceanalyser:threads.refresh" )#
 				</button>
 			</div>
-			<div class="col-md-4 text-right">
-				<span class="light-grey" id="threads-captured-at"></span>
-			</div>
+			<span class="light-grey" id="threads-captured-at"></span>
 		</div>
-
-		<div class="row" style="margin-bottom:1em;">
-			<div class="col-md-4">
-				<input type="text" class="form-control" id="threads-filter-name" placeholder="#translateResource( 'performanceanalyser:threads.filter.name' )#">
-			</div>
-			<div class="col-md-3">
-				<select class="form-control" id="threads-filter-state">
-					<option value="">#translateResource( "performanceanalyser:threads.filter.state.all" )#</option>
-				</select>
-			</div>
-			<div class="col-md-3">
-				<label class="checkbox-inline">
-					<input type="checkbox" class="ace" id="threads-filter-cfml">
-					<span class="lbl"> #translateResource( "performanceanalyser:threads.filter.cfml" )#</span>
-				</label>
-			</div>
-		</div>
-
-		<div id="threads-summary" class="well well-sm" style="margin-bottom:1em;"></div>
 
 		<div class="table-responsive">
 			<table class="table table-striped table-condensed" id="threads-table">
 				<thead>
 					<tr>
-						<th style="width:4em;"></th>
+						<th>#translateResource( "performanceanalyser:threads.th.request" )#</th>
 						<th>#translateResource( "performanceanalyser:threads.th.name" )#</th>
 						<th style="min-width:8em;">#translateResource( "performanceanalyser:threads.th.state" )#</th>
-						<th style="min-width:8em;">#translateResource( "performanceanalyser:threads.th.kind" )#</th>
-						<th style="min-width:10em;">#translateResource( "performanceanalyser:threads.th.summary" )#</th>
-						<th style="min-width:8em;" class="text-right">#translateResource( "performanceanalyser:threads.th.cpu" )#</th>
+						<th style="min-width:8em;" class="text-right">#translateResource( "performanceanalyser:threads.th.running" )#</th>
+						<th style="width:4em;"></th>
 					</tr>
 				</thead>
 				<tbody id="threads-tbody">
 					<tr>
-						<td colspan="6" class="text-center light-grey">#translateResource( "performanceanalyser:threads.loading" )#</td>
+						<td colspan="5" class="text-center light-grey">#translateResource( "performanceanalyser:threads.loading" )#</td>
 					</tr>
 				</tbody>
 			</table>
