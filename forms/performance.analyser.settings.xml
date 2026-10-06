@@ -2,8 +2,9 @@
 <form i18nBaseUri="performanceanalyser:settings.form.">
 	<tab id="basic" sortorder="10">
 		<fieldset id="logging" sortorder="10">
-			<field name="debug"      control="yesnoswitch" sortorder="10" />
-			<field name="features"   control="enumRadioList" multiple="true" enum="luceeDebugFeatures" sortorder="20" />
+			<field name="debug"           control="yesnoswitch"   sortorder="10" />
+			<field name="features"        control="enumRadioList" multiple="true" enum="luceeDebugFeatures" sortorder="20" />
+			<field name="trackallocation" control="yesnoswitch"   defaultValue="false" sortorder="30" />
 		</fieldset>
 		<fieldset id="display" sortorder="20">
 			<field name="showlogs"    control="yesnoswitch" sortorder="10" />
@@ -14,12 +15,12 @@
 		<fieldset id="storage" sortorder="10">
 			<field name="storageduration" control="spinner" defaultValue="1" sortorder="10" />
 		</fieldset>
-		<fieldset id="includerules" sororder="20">
+		<fieldset id="includerules" sortorder="20">
 			<field name="includetasks" control="yesnoswitch" sortorder="10" />
 			<field name="onlyforips"   control="textarea"    sortorder="20" />
 			<field name="onlyforurls"  control="textarea"    sortorder="30" />
 		</fieldset>
-		<fieldset id="excluderules" sororder="20">
+		<fieldset id="excluderules" sortorder="30">
 			<field name="excludeurls"  control="textarea"    sortorder="10" />
 		</fieldset>
 	</tab>
