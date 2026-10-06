@@ -1,8 +1,9 @@
 component extends="coldbox.system.Interceptor" {
 
-	property name="luceeDebuggingService" inject="delayedInjector:luceeDebuggingService";
-	property name="allocationSampler"      inject="delayedInjector:allocationSampler";
-	property name="presideObjectService"   inject="delayedInjector:presideObjectService";
+	property name="luceeDebuggingService"   inject="delayedInjector:luceeDebuggingService";
+	property name="allocationSampler"        inject="delayedInjector:allocationSampler";
+	property name="presideObjectService"     inject="delayedInjector:presideObjectService";
+	property name="activeRequestTracker"     inject="delayedInjector:activeRequestTracker";
 
 	public void function configure() {
 		variables.frameKey       = "_perfAllocFrame";
@@ -17,10 +18,36 @@ component extends="coldbox.system.Interceptor" {
 	}
 
 	public void function preProcess( event ) {
+		_tracker().begin( arguments.event );
 		_ensureViewletWrapped();
 		_ensureSelectDataWrapped();
 		_ensureRenderDataWrapped( arguments.event );
 		luceeDebuggingService.get().applyRequestMonitoringOutput();
+	}
+
+	public void function preEvent( event, interceptData ) {
+		var eventName = arguments.interceptData.processedEvent ?: "";
+
+		if ( !Len( eventName ) ) {
+			try {
+				eventName = arguments.event.getCurrentEvent();
+			} catch ( any e ) {
+				eventName = "";
+			}
+		}
+
+		if ( _isScheduledTask( arguments.event ) ) {
+			_tracker().beginTask( kind="task", label="", eventName=eventName );
+		} else if ( !_isBackgroundWork( arguments.event ) ) {
+			_tracker().noteEvent( eventName );
+			_tracker().noteUrl( _currentUrl( arguments.event ) );
+		}
+
+		_beginFrame(
+			  interceptData = arguments.interceptData
+			, kind          = "event"
+			, name          = eventName
+		);
 	}
 
 	public void function preViewRender( event, interceptData ) {
@@ -47,16 +74,23 @@ component extends="coldbox.system.Interceptor" {
 		_endFrame( arguments.interceptData );
 	}
 
-	public void function preEvent( event, interceptData ) {
-		_beginFrame(
-			  interceptData = arguments.interceptData
-			, kind          = "event"
-			, name          = arguments.interceptData.processedEvent ?: ""
-		);
+	public void function postInitializePresideSiteteePage( event, interceptData ) {
+		var pageType  = "";
+		var pageTitle = "";
+
+		try {
+			pageType  = arguments.event.getPageProperty( propertyName="page_type", defaultValue="" );
+			pageTitle = arguments.event.getPageProperty( propertyName="title", defaultValue="" );
+		} catch ( any e ) {
+			return;
+		}
+
+		_tracker().notePage( pageType=pageType, pageTitle=pageTitle );
 	}
 
 	public void function postEvent( event, interceptData ) {
 		_endFrame( arguments.interceptData );
+		_tracker().endTaskEvent( arguments.interceptData.processedEvent ?: "" );
 	}
 
 	/**
@@ -100,6 +134,40 @@ component extends="coldbox.system.Interceptor" {
 				, file = "performanceanalyser"
 				, text = "Failed to persist debug log: #e.message# | #e.detail# | #e.stacktrace#"
 			);
+		} finally {
+			_tracker().end();
+		}
+	}
+
+	private boolean function _isScheduledTask( required any event ) {
+		try {
+			return arguments.event.isBackgroundThread() && !Len( arguments.event.getValue( name="_runningAdhocTaskId", defaultValue="", private=true ) );
+		} catch ( any e ) {
+			return false;
+		}
+	}
+
+	private boolean function _isBackgroundWork( required any event ) {
+		try {
+			return arguments.event.isBackgroundThread() || Len( arguments.event.getValue( name="_runningAdhocTaskId", defaultValue="", private=true ) );
+		} catch ( any e ) {
+			return false;
+		}
+	}
+
+	private any function _tracker() {
+		if ( !StructKeyExists( variables, "tracker" ) ) {
+			variables.tracker = activeRequestTracker.get();
+		}
+
+		return variables.tracker;
+	}
+
+	private string function _currentUrl( required any event ) {
+		try {
+			return arguments.event.getCurrentUrl();
+		} catch ( any e ) {
+			return "";
 		}
 	}
 

@@ -4,79 +4,50 @@
  */
 component {
 
+	property name="threaddumpDao"           inject="presidecms:object:perf_analyser_threaddump";
+	property name="activeRequestTracker"    inject="activeRequestTracker";
+	property name="taskManagerService"      inject="delayedInjector:taskManagerService";
+	property name="adHocTaskManagerService" inject="delayedInjector:adHocTaskManagerService";
+
 // CONSTRUCTOR
 	public any function init() {
+		variables.adhocWrapped = false;
+
 		return this;
 	}
 
 // PUBLIC API METHODS
 	public struct function getThreadSnapshot() {
-		var threadMxBean = CreateObject( "java", "java.lang.management.ManagementFactory" ).getThreadMXBean();
+		_ensureAdhocWrapped();
 
-		if ( !threadMxBean.isThreadCpuTimeEnabled() ) {
-			try {
-				threadMxBean.setThreadCpuTimeEnabled( true );
-			} catch ( any e ) {
-				// some JVMs disallow enabling CPU time
+		var activeThreads = _getActiveCfmlThreads();
+		var threads       = [];
+		var byKind        = {};
+
+		for( var activeThread in activeThreads ) {
+			var kind = activeThread.preside.kind;
+
+			if ( !StructKeyExists( byKind, kind ) ) {
+				byKind[ kind ] = { label=kind, count=0 };
 			}
+			byKind[ kind ].count++;
+
+			var threadForBrowser = StructCopy( activeThread );
+			StructDelete( threadForBrowser, "fullStack" );
+			ArrayAppend( threads, threadForBrowser );
 		}
-
-		var allStacks = CreateObject( "java", "java.lang.Thread" ).getAllStackTraces();
-		var iterator  = allStacks.entrySet().iterator();
-		var threads   = [];
-		var byState   = {};
-
-		while ( iterator.hasNext() ) {
-			var entry      = iterator.next();
-			var javaThread = entry.getKey();
-			var stackArr   = entry.getValue();
-			var threadId   = javaThread.getId();
-			var state      = javaThread.getState().toString();
-			var cpuNs      = threadMxBean.getThreadCpuTime( threadId );
-			var cpuMs      = ( cpuNs > 0 ) ? ( cpuNs / 1000000 ) : 0;
-			var stack      = _stackToArray( stackArr );
-			var truncated  = _truncateAtServlet( stack );
-			var cfmlStack  = _extractCfmlStack( truncated );
-			var preside    = _decoratePreside( truncated, cfmlStack, javaThread.getName() );
-
-			if ( !StructKeyExists( byState, state ) ) {
-				byState[ state ] = { state=state, count=0, cpuTotalMs=0 };
-			}
-			byState[ state ].count++;
-			byState[ state ].cpuTotalMs += cpuMs;
-
-			ArrayAppend( threads, {
-				  id         = threadId
-				, name       = javaThread.getName()
-				, state      = state
-				, daemon     = javaThread.isDaemon()
-				, group      = _safeThreadGroupName( javaThread )
-				, cpuTimeMs  = cpuMs
-				, stack      = truncated
-				, cfmlStack  = cfmlStack
-				, preside    = preside
-			} );
-		}
-
-		ArraySort( threads, function( a, b ) {
-			if ( a.cpuTimeMs == b.cpuTimeMs ) {
-				return CompareNoCase( a.name, b.name );
-			}
-			return ( a.cpuTimeMs > b.cpuTimeMs ) ? -1 : 1;
-		} );
 
 		var summary = [];
-		for( var stateKey in byState ) {
-			ArrayAppend( summary, byState[ stateKey ] );
+		for( var kindKey in byKind ) {
+			ArrayAppend( summary, byKind[ kindKey ] );
 		}
 		ArraySort( summary, function( a, b ) {
-			return ( a.cpuTotalMs > b.cpuTotalMs ) ? -1 : 1;
+			return ( a.count > b.count ) ? -1 : 1;
 		} );
 
 		ArrayPrepend( summary, {
-			  state      = "ALL"
-			, count      = ArrayLen( threads )
-			, cpuTotalMs = _sumCpu( threads )
+			  label = "ALL"
+			, count = ArrayLen( threads )
 		} );
 
 		return {
@@ -86,7 +57,132 @@ component {
 		};
 	}
 
+	public string function saveThreadDump() {
+		_ensureAdhocWrapped();
+
+		var threads     = _collectThreads( activeOnly=false );
+		var label       = DateTimeFormat( Now(), "yyyy-mm-dd HH:nn:ss" );
+		var stored      = [];
+		var activeCount = 0;
+
+		for ( var thread in threads ) {
+			var identity = thread.identity ?: {};
+
+			if ( thread.activeCfml ) {
+				activeCount++;
+			}
+
+			ArrayAppend( stored, {
+				  name       = thread.name
+				, id         = ToString( thread.id )
+				, state      = thread.state
+				, elapsed    = _formatElapsed( thread.elapsedMs )
+				, activeCfml = thread.activeCfml
+				, primary    = identity.primary ?: ""
+				, secondary  = identity.secondary ?: ""
+				, cfmlStack  = thread.cfmlStack
+				, javaStack  = thread.fullStack
+			} );
+		}
+
+		return threaddumpDao.insertData( {
+			  label        = label
+			, thread_count = activeCount
+			, dump_text    = SerializeJSON( {
+				  capturedAt  = label
+				, activeCount = activeCount
+				, threads     = stored
+			} )
+		} );
+	}
+
+	public struct function getThreadDump( required string dumpId ) {
+		var record = threaddumpDao.selectData(
+			  id           = arguments.dumpId
+			, selectFields = [ "id", "label", "thread_count", "dump_text", "datecreated" ]
+		);
+
+		for( var row in record ) {
+			return row;
+		}
+
+		return {};
+	}
+
 // PRIVATE HELPERS
+	private array function _getActiveCfmlThreads() {
+		return _collectThreads( activeOnly=true );
+	}
+
+	private array function _collectThreads( boolean activeOnly=true ) {
+		var javaThreads = CreateObject( "java", "java.lang.Thread" );
+		var ownThreadId = javaThreads.currentThread().getId();
+		var iterator    = javaThreads.getAllStackTraces().entrySet().iterator();
+		var threads     = [];
+
+		while ( iterator.hasNext() ) {
+			var entry      = iterator.next();
+			var javaThread = entry.getKey();
+			var threadId   = javaThread.getId();
+			var state      = javaThread.getState().toString();
+
+			if ( threadId == ownThreadId ) {
+				continue;
+			}
+
+			var requestInfo = activeRequestTracker.lookup( threadId.toString() );
+
+			if ( arguments.activeOnly && !requestInfo.found && state != "RUNNABLE" ) {
+				continue;
+			}
+
+			var stack     = _stackToArray( entry.getValue() );
+			var truncated = _truncateAtServlet( stack );
+			var cfmlStack = _extractCfmlStack( truncated );
+			var preside   = _decoratePreside( truncated, cfmlStack, javaThread.getName() );
+
+			var activeCfml = requestInfo.found || ( state == "RUNNABLE" && preside.isCfml );
+
+			if ( arguments.activeOnly && !activeCfml ) {
+				continue;
+			}
+
+			if ( requestInfo.found && requestInfo.kind == "task" && !Len( requestInfo.label ?: "" ) ) {
+				requestInfo.label = _scheduledTaskName( requestInfo.event ?: "" );
+			}
+
+			preside.summary = _requestSummary( requestInfo, preside.summary );
+
+			ArrayAppend( threads, {
+				  id          = threadId
+				, name        = javaThread.getName()
+				, state       = state
+				, daemon      = javaThread.isDaemon()
+				, group       = _safeThreadGroupName( javaThread )
+				, elapsedMs   = requestInfo.found ? requestInfo.elapsedMs : -1
+				, activeCfml  = activeCfml
+				, requestInfo = requestInfo
+				, identity    = _requestIdentity( requestInfo, preside )
+				, stack       = truncated
+				, fullStack   = stack
+				, cfmlStack   = cfmlStack
+				, preside     = preside
+			} );
+		}
+
+		ArraySort( threads, function( a, b ) {
+			if ( ( a.activeCfml ?: false ) != ( b.activeCfml ?: false ) ) {
+				return ( a.activeCfml ?: false ) ? -1 : 1;
+			}
+			if ( a.elapsedMs == b.elapsedMs ) {
+				return CompareNoCase( a.name, b.name );
+			}
+			return ( a.elapsedMs > b.elapsedMs ) ? -1 : 1;
+		} );
+
+		return threads;
+	}
+
 	private array function _stackToArray( required any stackArr ) {
 		var frames = [];
 		if ( IsNull( arguments.stackArr ) ) {
@@ -148,8 +244,9 @@ component {
 		var summary     = "";
 		var stackText   = ArrayToList( arguments.stack, " " );
 		var name        = arguments.threadName;
+		var runsCfml    = ArrayLen( arguments.cfmlStack ) || FindNoCase( "lucee.", stackText ) || FindNoCase( "coldbox.", stackText );
 
-		if ( ArrayLen( arguments.cfmlStack ) || FindNoCase( "lucee.", stackText ) || FindNoCase( "coldbox.", stackText ) ) {
+		if ( runsCfml ) {
 			kind = "cfml";
 		}
 
@@ -199,7 +296,7 @@ component {
 			, tags       = tags
 			, highlights = highlights
 			, summary    = summary
-			, isCfml     = ArrayLen( arguments.cfmlStack ) > 0 || kind != "jvm"
+			, isCfml     = runsCfml
 		};
 	}
 
@@ -236,6 +333,211 @@ component {
 		return src;
 	}
 
+	private struct function _requestIdentity( required struct requestInfo, required struct preside ) {
+		var info = arguments.requestInfo;
+		var kind = info.kind ?: "";
+
+		if ( !Len( kind ) ) {
+			kind = arguments.preside.kind ?: "";
+		}
+
+		if ( Len( info.pageType ?: "" ) ) {
+			return {
+				  icon      = "fa-sitemap"
+				, primary   = info.url ?: ""
+				, secondary = _pageTypeName( info.pageType )
+			};
+		}
+
+		if ( kind == "task" ) {
+			return {
+				  icon      = "fa-clock-o"
+				, primary   = _taskHeading( "performanceanalyser:threads.identity.scheduled", _taskLabel( info, arguments.preside ) )
+				, secondary = ""
+			};
+		}
+
+		if ( kind == "adhoctask" ) {
+			return {
+				  icon      = "fa-play-circle"
+				, primary   = _taskHeading( "performanceanalyser:threads.identity.adhoc", _taskLabel( info, arguments.preside ) )
+				, secondary = ""
+			};
+		}
+
+		if ( info.found ) {
+			return {
+				  icon      = "fa-bolt"
+				, primary   = info.url ?: ""
+				, secondary = info.event ?: ""
+			};
+		}
+
+		return {
+			  icon      = "fa-code"
+			, primary   = arguments.preside.summary ?: ""
+			, secondary = ""
+		};
+	}
+
+	private string function _taskLabel( required struct requestInfo, required struct preside ) {
+		if ( Len( arguments.requestInfo.label ?: "" ) ) {
+			return arguments.requestInfo.label;
+		}
+		if ( Len( arguments.requestInfo.event ?: "" ) ) {
+			return arguments.requestInfo.event;
+		}
+
+		return arguments.preside.summary ?: "";
+	}
+
+	private string function _taskHeading( required string uri, required string name ) {
+		var prefix = $translateResource( uri=arguments.uri );
+
+		if ( !Len( arguments.name ) ) {
+			return prefix;
+		}
+
+		return prefix & ": " & arguments.name;
+	}
+
+	private string function _pageTypeName( required string pageType ) {
+		var uri        = "page-types.#arguments.pageType#:name";
+		var translated = $translateResource( uri=uri, defaultValue=arguments.pageType );
+
+		if ( translated == uri ) {
+			return arguments.pageType;
+		}
+
+		return translated;
+	}
+
+	private string function _scheduledTaskName( required string eventName ) {
+		if ( !Len( arguments.eventName ) ) {
+			return "";
+		}
+
+		var names = _taskNamesByEvent();
+
+		return names[ arguments.eventName ] ?: arguments.eventName;
+	}
+
+	private struct function _taskNamesByEvent() {
+		if ( StructKeyExists( variables, "taskNamesByEvent" ) ) {
+			return variables.taskNamesByEvent;
+		}
+
+		var names = {};
+
+		try {
+			var taskManager = taskManagerService.get();
+
+			for ( var taskKey in taskManager.listTasks() ) {
+				var task = taskManager.getTask( taskKey );
+
+				if ( Len( task.event ?: "" ) ) {
+					names[ task.event ] = task.name ?: taskKey;
+				}
+			}
+		} catch ( any e ) {
+			return names;
+		}
+
+		variables.taskNamesByEvent = names;
+
+		return names;
+	}
+
+	private void function _ensureAdhocWrapped() {
+		if ( variables.adhocWrapped ) {
+			return;
+		}
+
+		var taskService = "";
+
+		try {
+			taskService = adHocTaskManagerService.get();
+		} catch ( any e ) {
+			return;
+		}
+
+		lock name="perfAnalyserAdhocWrap" type="exclusive" timeout="5" {
+			if ( variables.adhocWrapped || StructKeyExists( taskService, "_perfAnalyserRunTaskWrapped" ) ) {
+				variables.adhocWrapped = true;
+				return;
+			}
+
+			var tracker = activeRequestTracker;
+
+			taskService.originalRunTask = taskService.runTask;
+			StructDelete( taskService, "runTask" );
+
+			taskService.runTask = function() {
+				if ( tracker.hasRequest() ) {
+					return taskService.originalRunTask( argumentCollection=arguments );
+				}
+
+				var taskId    = arguments.taskId ?: ( arguments[ 1 ] ?: "" );
+				var label     = "";
+				var eventName = "";
+
+				try {
+					var task = taskService.getTask( taskId );
+
+					if ( task.recordCount ) {
+						label     = task.title ?: "";
+						eventName = task.event ?: "";
+					}
+				} catch ( any e ) {}
+
+				if ( !Len( label ) ) {
+					label = eventName;
+				}
+
+				tracker.beginTask( kind="adhoctask", label=label, eventName=eventName );
+
+				try {
+					return taskService.originalRunTask( argumentCollection=arguments );
+				} finally {
+					tracker.end();
+				}
+			};
+
+			taskService._perfAnalyserRunTaskWrapped = true;
+			variables.adhocWrapped                  = true;
+		}
+	}
+
+	private string function _requestSummary( required struct requestInfo, required string fallback ) {
+		var parts = [];
+
+		if ( Len( arguments.requestInfo.url ?: "" ) ) {
+			ArrayAppend( parts, arguments.requestInfo.url );
+		}
+		if ( Len( arguments.requestInfo.pageType ?: "" ) ) {
+			ArrayAppend( parts, arguments.requestInfo.pageType );
+		}
+		if ( Len( arguments.requestInfo.pageTitle ?: "" ) ) {
+			ArrayAppend( parts, arguments.requestInfo.pageTitle );
+		}
+		if ( Len( arguments.requestInfo.event ?: "" ) ) {
+			ArrayAppend( parts, arguments.requestInfo.event );
+		}
+		if ( ArrayLen( parts ) ) {
+			return ArrayToList( parts, " · " );
+		}
+
+		return arguments.fallback;
+	}
+
+	private string function _formatElapsed( required numeric elapsedMs ) {
+		if ( arguments.elapsedMs < 0 ) {
+			return "unknown";
+		}
+
+		return NumberFormat( arguments.elapsedMs / 1000, "0.000" ) & "s";
+	}
+
 	private string function _safeThreadGroupName( required any javaThread ) {
 		try {
 			var group = arguments.javaThread.getThreadGroup();
@@ -244,14 +546,6 @@ component {
 			}
 		} catch ( any e ) {}
 		return "";
-	}
-
-	private numeric function _sumCpu( required array threads ) {
-		var total = 0;
-		for( var t in arguments.threads ) {
-			total += Val( t.cpuTimeMs ?: 0 );
-		}
-		return total;
 	}
 
 }

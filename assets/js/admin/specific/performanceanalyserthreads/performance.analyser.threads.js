@@ -1,17 +1,15 @@
 ( function( $ ){
 
-	var $root          = $( ".perf-analyser-threads" );
-	var snapshotUrl    = $root.data( "snapshotUrl" );
-	var $tbody         = $( "#threads-tbody" );
-	var $summary       = $( "#threads-summary" );
-	var $capturedAt    = $( "#threads-captured-at" );
-	var $stateFilter   = $( "#threads-filter-state" );
-	var $nameFilter    = $( "#threads-filter-name" );
-	var $cfmlOnly      = $( "#threads-filter-cfml" );
-	var $autoRefresh   = $( "#threads-autorefresh" );
-	var snapshot       = { threads:[], summary:[] };
-	var refreshTimer   = null;
-	var viewMode       = "preside";
+	var $root        = $( ".perf-analyser-threads" );
+	var snapshotUrl  = $root.data( "snapshotUrl" );
+	var copyLabel    = $root.data( "copyLabel" ) || "Copy stack trace";
+	var copiedLabel  = $root.data( "copiedLabel" ) || "Copied";
+	var $tbody       = $( "#threads-tbody" );
+	var $capturedAt  = $( "#threads-captured-at" );
+	var $autoRefresh = $( "#threads-autorefresh" );
+	var $refreshRate = $( "#threads-refresh-rate" );
+	var snapshot     = { threads:[], summary:[] };
+	var refreshTimer = null;
 
 	if ( !$root.length || !snapshotUrl ) {
 		return;
@@ -21,64 +19,35 @@
 		return $( "<div/>" ).text( value == null ? "" : String( value ) ).html();
 	};
 
-	var formatCpu = function( ms ){
-		var seconds = ( Number( ms ) || 0 ) / 1000;
+	var formatElapsed = function( ms ){
+		var seconds = Number( ms );
+		if ( isNaN( seconds ) || seconds < 0 ) {
+			return "";
+		}
+		seconds = seconds / 1000;
 		if ( seconds < 1 ) {
 			return seconds.toFixed( 3 ) + "s";
 		}
-		return seconds.toFixed( 1 ) + "s";
-	};
-
-	var getViewMode = function(){
-		return $( "input[name=threads-view-mode]:checked" ).val() || "preside";
-	};
-
-	var renderSummary = function(){
-		var html = [];
-		$.each( snapshot.summary || [], function( i, row ){
-			html.push(
-				'<span class="label label-info" style="margin-right:0.5em;">' +
-					escapeHtml( row.state ) +
-					' (' + escapeHtml( row.count ) + ') ' +
-					escapeHtml( formatCpu( row.cpuTotalMs ) ) +
-				'</span>'
-			);
-		} );
-		$summary.html( html.join( " " ) || "&nbsp;" );
-	};
-
-	var populateStateFilter = function(){
-		var current = $stateFilter.val();
-		var states  = {};
-		$.each( snapshot.threads || [], function( i, t ){
-			states[ t.state ] = true;
-		} );
-		$stateFilter.find( "option:not(:first)" ).remove();
-		Object.keys( states ).sort().forEach( function( state ){
-			$stateFilter.append( $( "<option/>" ).val( state ).text( state ) );
-		} );
-		if ( current ) {
-			$stateFilter.val( current );
+		if ( seconds < 10 ) {
+			return seconds.toFixed( 1 ) + "s";
 		}
+		return Math.round( seconds ) + "s";
+	};
+
+	var stackLines = function( thread ){
+		if ( thread.cfmlStack && thread.cfmlStack.length ) {
+			return thread.cfmlStack;
+		}
+		if ( thread.preside && thread.preside.highlights && thread.preside.highlights.length ) {
+			return $.map( thread.preside.highlights, function( h ){
+				return "[" + h.kind + "] " + ( h.label || h.frame );
+			} );
+		}
+		return thread.stack || [];
 	};
 
 	var stackHtml = function( thread ){
-		var mode = getViewMode();
-		var lines;
-
-		if ( mode === "preside" ) {
-			if ( thread.cfmlStack && thread.cfmlStack.length ) {
-				lines = thread.cfmlStack;
-			} else if ( thread.preside && thread.preside.highlights && thread.preside.highlights.length ) {
-				lines = $.map( thread.preside.highlights, function( h ){
-					return "[" + h.kind + "] " + ( h.label || h.frame );
-				} );
-			} else {
-				lines = thread.stack || [];
-			}
-		} else {
-			lines = thread.stack || [];
-		}
+		var lines = stackLines( thread );
 
 		if ( !lines.length ) {
 			return '<em class="light-grey">No stack frames</em>';
@@ -89,72 +58,87 @@
 		'</pre>';
 	};
 
-	var matchesFilters = function( thread ){
-		var nameQ  = $.trim( $nameFilter.val() || "" ).toLowerCase();
-		var stateQ = $stateFilter.val();
-		var cfml   = $cfmlOnly.is( ":checked" );
+	var identityOf = function( thread ){
+		return thread.identity || { icon:"fa-code", primary:"", secondary:"" };
+	};
 
-		if ( nameQ && String( thread.name || "" ).toLowerCase().indexOf( nameQ ) === -1 ) {
-			return false;
+	var stackText = function( thread ){
+		var identity = identityOf( thread );
+		var lines    = [ '"' + thread.name + '" ' + thread.state ];
+
+		if ( identity.primary ) {
+			lines.push( identity.primary );
 		}
-		if ( stateQ && thread.state !== stateQ ) {
-			return false;
+		if ( identity.secondary ) {
+			lines.push( identity.secondary );
 		}
-		if ( cfml && !( thread.preside && thread.preside.isCfml ) ) {
-			return false;
+
+		return lines.concat( stackLines( thread ) ).join( "\n" );
+	};
+
+	var copyText = function( text ){
+		var deferred = $.Deferred();
+
+		if ( navigator.clipboard && window.isSecureContext ) {
+			navigator.clipboard.writeText( text ).then( deferred.resolve, deferred.reject );
+			return deferred.promise();
 		}
-		return true;
+
+		var $textarea = $( "<textarea/>" ).val( text ).css( { position:"fixed", top:0, left:0, opacity:0 } ).appendTo( "body" );
+
+		$textarea[ 0 ].select();
+		try {
+			document.execCommand( "copy" ) ? deferred.resolve() : deferred.reject();
+		} catch( e ) {
+			deferred.reject();
+		}
+		$textarea.remove();
+
+		return deferred.promise();
 	};
 
 	var renderThreads = function(){
 		var html = [];
-		var mode = getViewMode();
 
 		$.each( snapshot.threads || [], function( i, thread ){
-			if ( !matchesFilters( thread ) ) {
-				return;
-			}
-
-			var kind    = ( thread.preside && thread.preside.kind ) ? thread.preside.kind : "jvm";
-			var summary = mode === "preside"
-				? ( ( thread.preside && thread.preside.summary ) || ( thread.cfmlStack && thread.cfmlStack[0] ) || "" )
-				: ( ( thread.stack && thread.stack[0] ) || "" );
-			var tags = ( thread.preside && thread.preside.tags ) ? thread.preside.tags : [];
-			var tagHtml = $.map( tags, function( tag ){
-				return '<span class="label" style="margin-right:0.25em;">' + escapeHtml( tag ) + '</span>';
-			} ).join( "" );
+			var identity  = identityOf( thread );
+			var secondary = identity.secondary
+				? '<div class="light-grey"><small>' + escapeHtml( identity.secondary ) + '</small></div>'
+				: "";
 
 			html.push(
 				'<tr class="thread-row" data-thread-index="' + i + '">' +
-					'<td><button type="button" class="btn btn-xs btn-link thread-toggle"><i class="fa fa-chevron-right"></i></button></td>' +
+					'<td><div class="thread-identity">' +
+						'<button type="button" class="btn btn-xs btn-link thread-toggle"><i class="fa fa-chevron-right"></i></button>' +
+						'<i class="fa fa-fw ' + escapeHtml( identity.icon || "fa-code" ) + ' thread-identity-icon"></i>' +
+						'<div class="thread-identity-text">' +
+							'<div>' + escapeHtml( identity.primary ) + '</div>' +
+							secondary +
+						'</div>' +
+					'</div></td>' +
 					'<td><code>' + escapeHtml( thread.name ) + '</code></td>' +
 					'<td>' + escapeHtml( thread.state ) + '</td>' +
-					'<td>' + escapeHtml( kind ) + ( tagHtml ? '<div>' + tagHtml + '</div>' : '' ) + '</td>' +
-					'<td><small>' + escapeHtml( summary ) + '</small></td>' +
-					'<td class="text-right">' + escapeHtml( formatCpu( thread.cpuTimeMs ) ) + '</td>' +
+					'<td class="text-right">' + escapeHtml( formatElapsed( thread.elapsedMs ) ) + '</td>' +
+					'<td class="text-right"><button type="button" class="btn btn-xs btn-default thread-copy" title="' + escapeHtml( copyLabel ) + '"><i class="fa fa-copy"></i></button></td>' +
 				'</tr>' +
-				'<tr class="thread-stack-row hide" data-thread-index="' + i + '"><td colspan="6">' + stackHtml( thread ) + '</td></tr>'
+				'<tr class="thread-stack-row hide" data-thread-index="' + i + '"><td colspan="5">' + stackHtml( thread ) + '</td></tr>'
 			);
 		} );
 
 		if ( !html.length ) {
-			html.push( '<tr><td colspan="6" class="text-center light-grey">No threads match the current filters.</td></tr>' );
+			html.push( '<tr><td colspan="5" class="text-center light-grey">No requests or CFML threads in progress.</td></tr>' );
 		}
 
 		$tbody.html( html.join( "" ) );
 	};
 
 	var loadSnapshot = function(){
-		$tbody.html( '<tr><td colspan="6" class="text-center light-grey">Loading…</td></tr>' );
-
 		$.getJSON( snapshotUrl ).done( function( data ){
 			snapshot = data || { threads:[], summary:[] };
 			$capturedAt.text( snapshot.capturedAt ? ( "Captured " + snapshot.capturedAt ) : "" );
-			renderSummary();
-			populateStateFilter();
 			renderThreads();
 		} ).fail( function(){
-			$tbody.html( '<tr><td colspan="6" class="text-center text-danger">Failed to load thread snapshot.</td></tr>' );
+			$tbody.html( '<tr><td colspan="5" class="text-center text-danger">Failed to load thread snapshot.</td></tr>' );
 		} );
 	};
 
@@ -169,29 +153,51 @@
 		$icon.toggleClass( "fa-chevron-right fa-chevron-down" );
 	} );
 
-	$( "input[name=threads-view-mode]" ).on( "change", function(){
-		viewMode = getViewMode();
-		renderThreads();
+	$root.on( "click", ".thread-copy", function( e ){
+		e.preventDefault();
+		var $btn   = $( this );
+		var index  = $btn.closest( "tr" ).data( "threadIndex" );
+		var thread = ( snapshot.threads || [] )[ index ];
+
+		if ( !thread ) {
+			return;
+		}
+
+		copyText( stackText( thread ) ).done( function(){
+			$btn.attr( "title", copiedLabel ).find( "i" ).removeClass( "fa-copy" ).addClass( "fa-check" );
+			setTimeout( function(){
+				$btn.attr( "title", copyLabel ).find( "i" ).removeClass( "fa-check" ).addClass( "fa-copy" );
+			}, 1500 );
+		} );
 	} );
 
-	$nameFilter.on( "keyup change", renderThreads );
-	$stateFilter.on( "change", renderThreads );
-	$cfmlOnly.on( "change", renderThreads );
+	var refreshInterval = function(){
+		var seconds = parseInt( $refreshRate.val(), 10 );
+
+		if ( isNaN( seconds ) || seconds < 1 ) {
+			seconds = 5;
+		}
+
+		return seconds * 1000;
+	};
+
+	var syncAutoRefresh = function(){
+		if ( refreshTimer ) {
+			clearInterval( refreshTimer );
+			refreshTimer = null;
+		}
+		if ( $autoRefresh.is( ":checked" ) ) {
+			refreshTimer = setInterval( loadSnapshot, refreshInterval() );
+		}
+	};
 
 	$( "#threads-refresh-btn" ).on( "click", function( e ){
 		e.preventDefault();
 		loadSnapshot();
 	} );
 
-	$autoRefresh.on( "change", function(){
-		if ( refreshTimer ) {
-			clearInterval( refreshTimer );
-			refreshTimer = null;
-		}
-		if ( $autoRefresh.is( ":checked" ) ) {
-			refreshTimer = setInterval( loadSnapshot, 5000 );
-		}
-	} );
+	$autoRefresh.on( "change", syncAutoRefresh );
+	$refreshRate.on( "change", syncAutoRefresh );
 
 	loadSnapshot();
 
