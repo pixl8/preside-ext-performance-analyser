@@ -306,32 +306,43 @@ component extends="coldbox.system.Interceptor" {
 	}
 
 	private void function _ensureRenderDataWrapped( required any event ) {
-		if ( StructKeyExists( arguments.event, "_perfAnalyserRenderDataWrapped" ) ) {
+		var ctx = arguments.event;
+
+		if ( StructKeyExists( ctx, "_perfAnalyserRenderDataWrapped" ) ) {
 			return;
 		}
 
-		var sampler = _sampler();
-		var ctx     = arguments.event;
-
-		ctx.originalRenderData = ctx.renderData;
-		StructDelete( ctx, "renderData" );
-
-		ctx.renderData = function() {
-			if ( !sampler.isActive() ) {
-				return ctx.originalRenderData( argumentCollection=arguments );
+		// ctx is the app-wide shared RequestContext; on lock timeout skip wrapping rather than fail the request
+		lock name="perfAnalyserRenderDataWrap" type="exclusive" timeout="5" throwOnTimeout=false {
+			if ( StructKeyExists( ctx, "_perfAnalyserRenderDataWrapped" ) ) {
+				return;
 			}
 
-			var renderType = LCase( arguments.type ?: ( arguments[ 1 ] ?: "html" ) );
-			var frameId    = sampler.start( kind="renderdata", name=renderType );
+			var sampler = _sampler();
 
-			try {
-				return ctx.originalRenderData( argumentCollection=arguments );
-			} finally {
-				sampler.stop( frameId );
+			// never re-capture: a second wrap would point originalRenderData at the wrapper itself -> infinite recursion
+			if ( !StructKeyExists( ctx, "originalRenderData" ) ) {
+				ctx.originalRenderData = ctx.renderData;
 			}
-		};
 
-		ctx._perfAnalyserRenderDataWrapped = true;
+			// assign directly (no StructDelete first): concurrent requests must never see renderData missing
+			ctx.renderData = function() {
+				if ( !sampler.isActive() ) {
+					return ctx.originalRenderData( argumentCollection=arguments );
+				}
+
+				var renderType = LCase( arguments.type ?: ( arguments[ 1 ] ?: "html" ) );
+				var frameId    = sampler.start( kind="renderdata", name=renderType );
+
+				try {
+					return ctx.originalRenderData( argumentCollection=arguments );
+				} finally {
+					sampler.stop( frameId );
+				}
+			};
+
+			ctx._perfAnalyserRenderDataWrapped = true;
+		}
 	}
 
 	private string function _safeWebUserId() {
