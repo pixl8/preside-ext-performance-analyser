@@ -312,7 +312,8 @@ component extends="coldbox.system.Interceptor" {
 			return;
 		}
 
-		lock name="perfAnalyserRenderDataWrap" type="exclusive" timeout="5" {
+		// ctx is the app-wide shared RequestContext; on lock timeout skip wrapping rather than fail the request
+		lock name="perfAnalyserRenderDataWrap" type="exclusive" timeout="5" throwOnTimeout=false {
 			if ( StructKeyExists( ctx, "_perfAnalyserRenderDataWrapped" ) ) {
 				return;
 			}
@@ -323,8 +324,8 @@ component extends="coldbox.system.Interceptor" {
 			if ( !StructKeyExists( ctx, "originalRenderData" ) ) {
 				ctx.originalRenderData = ctx.renderData;
 			}
-			StructDelete( ctx, "renderData" );
 
+			// assign directly (no StructDelete first): concurrent requests must never see renderData missing
 			ctx.renderData = function() {
 				if ( !sampler.isActive() ) {
 					return ctx.originalRenderData( argumentCollection=arguments );
